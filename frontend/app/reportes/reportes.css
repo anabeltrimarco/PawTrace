@@ -1,0 +1,973 @@
+/* =========================================
+   PAWTRACE - REPORTES
+   SPRINT 1.3.3.2
+   KPIs INTERACTIVOS
+========================================= */
+
+.reportes-page {
+  padding: 42px 0 90px;
+}
+
+/* =========================================
+   HEADER
+========================================= */
+
+.reportes-header {
+  text-align: center;
+  margin-bottom: 34px;
+}
+
+.reportes-back {
+  display: inline-flex;
+  margin-bottom: 16px;
+
+  color: #009975;
+
+  font-size: 15px;
+  font-weight: 800;
+
+  text-decoration: none;
+
+  transition:
+    transform 0.2s ease,
+    color 0.2s ease;
+}
+
+.reportes-back:hover {
+  color: #007d61;
+  transform: translateX(-3px);
+}
+
+.reportes-header h1 {
+  margin: 0;
+
+  font-size:
+    clamp(
+      44px,
+      5vw,
+      68px
+    );
+
+  line-height: 1;
+
+  letter-spacing:
+    -0.05em;
+
+  color: #10231f;
+}
+
+.reportes-header p {
+  margin:
+    14px auto 0;
+
+  max-width: 760px;
+
+  color: #64736f;
+
+  font-size: 19px;
+
+  line-height: 1.6;
+}
+
+/* =========================================
+   KPIs
+========================================= */
+
+.reportes-stats {
+  display: grid;
+
+  grid-template-columns:
+    repeat(
+      4,
+      minmax(0, 1fr)
+    );
+
+  gap: 28px;
+
+  margin:
+    40px 0 44px;
+}
+
+/* =========================================
+   KPI BUTTON
+========================================= */
+
+.reporte-stat-card {
+  appearance: none;
+
+  position: relative;
+
+  min-height: 285px;
+
+  width: 100%;
+
+  padding:
+    32px 24px
+    38px;
+
+  display: flex;
+
+  flex-direction: column;
+
+  align-items: center;
+
+  justify-content: center;
+
+  background: #ffffff;
+
+  border:
+    2px solid
+    transparent;
+
+  border-radius: 28px;
+
+  box-shadow:
+    0 14px 35px
+      rgba(
+        20,
+        50,
+        40,
+        0.08
+      ),
+    0 3px 8px
+      rgba(
+        20,
+        50,
+        40,
+        0.04
+      );
+
+  font: inherit;
+
+  cursor: pointer;
+
+  outline: none;
+
+  transition:
+    transform 0.22s ease,
+    box-shadow 0.22s ease,
+    border-color 0.22s ease,
+    background 0.22s ease;
+}
+
+.reporte-stat-card:hover {
+  transform:
+    translateY(-7px);
+
+  box-shadow:
+    0 24px 55px
+      rgba(
+        20,
+        50,
+        40,
+        0.13
+      ),
+    0 6px 14px
+      rgba(
+        20,
+        50,
+        40,
+        0.05
+      );
+}
+
+.reporte-stat-card:active {
+  transform:
+    translateY(-2px)
+    scale(0.985);
+}
+
+/* =========================================
+   SELECCIONADO
+========================================= */
+
+.reporte-stat-card.activo {
+  transform:
+    translateY(-5px);
+
+  box-shadow:
+    0 24px 60px
+      rgba(
+        20,
+        50,
+        40,
+        0.15
+      );
+}
+
+.reporte-stat-card.total.activo {
+  border-color:
+    #7c3aed;
+
+  background:
+    linear-gradient(
+      180deg,
+      #ffffff 0%,
+      #faf7ff 100%
+    );
+}
+
+.reporte-stat-card.perdido.activo {
+  border-color:
+    #ef4444;
+
+  background:
+    linear-gradient(
+      180deg,
+      #ffffff 0%,
+      #fff6f6 100%
+    );
+}
+
+.reporte-stat-card.encontrado.activo {
+  border-color:
+    #10b981;
+
+  background:
+    linear-gradient(
+      180deg,
+      #ffffff 0%,
+      #f4fdf9 100%
+    );
+}
+
+.reporte-stat-card.avistamiento.activo {
+  border-color:
+    #f59e0b;
+
+  background:
+    linear-gradient(
+      180deg,
+      #ffffff 0%,
+      #fffaf0 100%
+    );
+}
+
+/* =========================================
+   ICONOS
+========================================= */
+
+.reporte-stat-icon-wrap {
+  width: 90px;
+  height: 90px;
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  border-radius: 50%;
+
+  margin-bottom: 20px;
+
+  font-size: 39px;
+
+  transition:
+    transform 0.22s ease;
+}
+
+.reporte-stat-card:hover
+.reporte-stat-icon-wrap {
+  transform:
+    scale(1.06);
+}
+
+.reporte-stat-card.total
+.reporte-stat-icon-wrap {
+  background: #f1e9ff;
+}
+
+.reporte-stat-card.perdido
+.reporte-stat-icon-wrap {
+  background: #fee2e2;
+}
+
+.reporte-stat-card.encontrado
+.reporte-stat-icon-wrap {
+  background: #dcfce7;
+}
+
+.reporte-stat-card.avistamiento
+.reporte-stat-icon-wrap {
+  background: #fff3d5;
+}
+
+/* =========================================
+   NÚMEROS
+========================================= */
+
+.reporte-stat-card strong {
+  margin-bottom: 10px;
+
+  font-size: 56px;
+
+  line-height: 1;
+
+  letter-spacing:
+    -0.04em;
+}
+
+.reporte-stat-card.total
+strong {
+  color: #6d45a5;
+}
+
+.reporte-stat-card.perdido
+strong {
+  color: #ef4444;
+}
+
+.reporte-stat-card.encontrado
+strong {
+  color: #10b981;
+}
+
+.reporte-stat-card.avistamiento
+strong {
+  color: #f59e0b;
+}
+
+/* =========================================
+   TEXTOS
+========================================= */
+
+.reporte-stat-label {
+  color: #334155;
+
+  font-size: 20px;
+
+  font-weight: 900;
+}
+
+.reporte-stat-hint {
+  margin-top: 8px;
+
+  color: #94a3b8;
+
+  font-size: 12px;
+
+  font-weight: 700;
+
+  opacity: 0;
+
+  transform:
+    translateY(5px);
+
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+}
+
+.reporte-stat-card:hover
+.reporte-stat-hint,
+.reporte-stat-card.activo
+.reporte-stat-hint {
+  opacity: 1;
+
+  transform:
+    translateY(0);
+}
+
+/* =========================================
+   RAYITA INFERIOR
+========================================= */
+
+.reporte-stat-card::after {
+  content: "";
+
+  width: 50px;
+
+  height: 4px;
+
+  border-radius:
+    999px;
+
+  position:
+    absolute;
+
+  left: 50%;
+
+  bottom: 25px;
+
+  transform:
+    translateX(-50%);
+
+  transition:
+    width 0.22s ease;
+}
+
+.reporte-stat-card:hover::after,
+.reporte-stat-card.activo::after {
+  width: 76px;
+}
+
+.reporte-stat-card.total::after {
+  background: #7c3aed;
+}
+
+.reporte-stat-card.perdido::after {
+  background: #ef4444;
+}
+
+.reporte-stat-card.encontrado::after {
+  background: #10b981;
+}
+
+.reporte-stat-card.avistamiento::after {
+  background: #f59e0b;
+}
+
+/* =========================================
+   FILTROS
+========================================= */
+
+.reportes-filters {
+  position: relative;
+
+  margin-bottom: 24px;
+}
+
+.reportes-clear-button {
+  margin-top: 12px;
+
+  border: 0;
+
+  background:
+    transparent;
+
+  color: #64748b;
+
+  font-size: 14px;
+
+  font-weight: 800;
+
+  cursor: pointer;
+
+  transition:
+    color 0.2s ease;
+}
+
+.reportes-clear-button:hover {
+  color: #0f766e;
+}
+
+/* =========================================
+   FILTRO ACTIVO
+========================================= */
+
+.reportes-active-filter {
+  margin:
+    0 0 24px;
+
+  padding:
+    13px 18px;
+
+  border:
+    1px solid
+    #dce8e4;
+
+  border-radius:
+    14px;
+
+  background:
+    #ffffff;
+
+  color:
+    #475569;
+
+  font-size:
+    14px;
+
+  font-weight:
+    800;
+
+  box-shadow:
+    0 5px 15px
+      rgba(
+        20,
+        50,
+        40,
+        0.04
+      );
+}
+
+/* =========================================
+   RESULTADOS
+========================================= */
+
+.reportes-results-header {
+  display: flex;
+
+  align-items: center;
+
+  justify-content:
+    space-between;
+
+  margin:
+    22px 0 18px;
+
+  color:
+    #64748b;
+}
+
+.reportes-results-header strong {
+  color:
+    #10231f;
+
+  font-size:
+    18px;
+}
+
+/* =========================================
+   GRID REPORTES
+========================================= */
+
+.reportes-grid {
+  display: grid;
+
+  grid-template-columns:
+    repeat(
+      2,
+      minmax(0, 1fr)
+    );
+
+  gap: 26px;
+}
+
+/* =========================================
+   CARD REPORTE
+========================================= */
+
+.reporte-card {
+  display: grid;
+
+  grid-template-columns:
+    42% 58%;
+
+  overflow:
+    hidden;
+
+  min-height:
+    270px;
+
+  background:
+    #ffffff;
+
+  border:
+    1px solid
+    #e1e9e6;
+
+  border-radius:
+    24px;
+
+  box-shadow:
+    0 15px 40px
+      rgba(
+        20,
+        50,
+        40,
+        0.07
+      );
+
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.reporte-card:hover {
+  transform:
+    translateY(-4px);
+
+  box-shadow:
+    0 22px 50px
+      rgba(
+        20,
+        50,
+        40,
+        0.11
+      );
+}
+
+/* =========================================
+   FOTO
+========================================= */
+
+.reporte-foto {
+  min-height:
+    270px;
+
+  background:
+    #edf7f3;
+
+  overflow:
+    hidden;
+
+  display:
+    flex;
+
+  align-items:
+    center;
+
+  justify-content:
+    center;
+}
+
+.reporte-img {
+  width: 100%;
+
+  height: 100%;
+
+  min-height:
+    270px;
+
+  object-fit:
+    cover;
+}
+
+.reporte-foto-placeholder {
+  font-size:
+    58px;
+}
+
+/* =========================================
+   INFO
+========================================= */
+
+.reporte-info {
+  display: flex;
+
+  flex-direction:
+    column;
+
+  padding:
+    25px;
+}
+
+.reporte-card-top {
+  margin-bottom:
+    8px;
+}
+
+.reporte-info h3 {
+  margin:
+    3px 0
+    7px;
+
+  color:
+    #10231f;
+
+  font-size:
+    26px;
+}
+
+.reporte-meta {
+  margin:
+    0 0 12px;
+
+  color:
+    #64736f;
+
+  font-size:
+    14px;
+
+  font-weight:
+    700;
+}
+
+.reporte-ubicacion {
+  margin:
+    0 0 12px;
+
+  color:
+    #475569;
+
+  font-size:
+    14px;
+
+  line-height:
+    1.5;
+}
+
+.reporte-descripcion {
+  margin:
+    0 0 17px;
+
+  color:
+    #64748b;
+
+  line-height:
+    1.6;
+
+  font-size:
+    14px;
+}
+
+/* =========================================
+   CONTACTO
+========================================= */
+
+.reporte-card-footer {
+  margin-top:
+    auto;
+
+  padding-top:
+    14px;
+
+  border-top:
+    1px solid
+    #eef2f0;
+}
+
+.reporte-contacto {
+  color:
+    #059669;
+
+  font-weight:
+    900;
+
+  text-decoration:
+    none;
+}
+
+.reporte-contacto:hover {
+  text-decoration:
+    underline;
+}
+
+.reporte-sin-contacto {
+  color:
+    #94a3b8;
+
+  font-size:
+    13px;
+}
+
+/* =========================================
+   ESTADO VACÍO
+========================================= */
+
+.reportes-empty {
+  display: flex;
+
+  flex-direction:
+    column;
+
+  align-items:
+    center;
+
+  justify-content:
+    center;
+
+  min-height:
+    280px;
+
+  padding:
+    35px;
+
+  border:
+    1px solid
+    #e2ebe7;
+
+  border-radius:
+    24px;
+
+  background:
+    #ffffff;
+
+  text-align:
+    center;
+}
+
+.reportes-empty > span {
+  font-size:
+    50px;
+}
+
+.reportes-empty h3 {
+  margin:
+    14px 0 5px;
+}
+
+.reportes-empty p {
+  color:
+    #64748b;
+}
+
+.reportes-empty-clear {
+  margin-top:
+    12px;
+
+  padding:
+    11px 18px;
+
+  border:
+    0;
+
+  border-radius:
+    999px;
+
+  background:
+    #10b981;
+
+  color:
+    #ffffff;
+
+  font-weight:
+    900;
+
+  cursor:
+    pointer;
+}
+
+/* =========================================
+   LOADING
+========================================= */
+
+.reportes-loading {
+  min-height:
+    220px;
+
+  display:
+    flex;
+
+  flex-direction:
+    column;
+
+  align-items:
+    center;
+
+  justify-content:
+    center;
+
+  gap:
+    14px;
+
+  color:
+    #64748b;
+
+  font-weight:
+    700;
+}
+
+.reportes-spinner {
+  width:
+    36px;
+
+  height:
+    36px;
+
+  border:
+    4px solid
+    #dff5ed;
+
+  border-top-color:
+    #10b981;
+
+  border-radius:
+    50%;
+
+  animation:
+    reportes-spin
+    0.7s
+    linear
+    infinite;
+}
+
+@keyframes reportes-spin {
+  to {
+    transform:
+      rotate(360deg);
+  }
+}
+
+/* =========================================
+   RESPONSIVE
+========================================= */
+
+@media (
+  max-width: 1050px
+) {
+  .reportes-stats {
+    grid-template-columns:
+      repeat(
+        2,
+        1fr
+      );
+  }
+
+  .reportes-grid {
+    grid-template-columns:
+      1fr;
+  }
+}
+
+@media (
+  max-width: 650px
+) {
+  .reportes-stats {
+    gap:
+      16px;
+  }
+
+  .reporte-stat-card {
+    min-height:
+      220px;
+  }
+
+  .reporte-stat-card
+  strong {
+    font-size:
+      45px;
+  }
+
+  .reporte-stat-icon-wrap {
+    width:
+      70px;
+
+    height:
+      70px;
+
+    font-size:
+      30px;
+  }
+
+  .reporte-card {
+    grid-template-columns:
+      1fr;
+  }
+
+  .reporte-foto,
+  .reporte-img {
+    min-height:
+      220px;
+
+    height:
+      220px;
+  }
+}
+
+@media (
+  max-width: 520px
+) {
+  .reportes-stats {
+    grid-template-columns:
+      1fr;
+  }
+
+  .reporte-stat-card {
+    min-height:
+      190px;
+  }
+
+  .reportes-results-header {
+    flex-direction:
+      column;
+
+    align-items:
+      flex-start;
+
+    gap:
+      4px;
+  }
+}

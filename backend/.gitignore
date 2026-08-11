@@ -1,0 +1,8 @@
+node_modules/
+.env
+uploads/mascotas/*
+uploads/reportes/*
+!uploads/mascotas/.gitkeep
+!uploads/reportes/.gitkeep
+npm-debug.log*
+*.log
