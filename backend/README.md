@@ -29,10 +29,9 @@ Editá `.env` con los datos de tu base de datos PostgreSQL:
 ```
 DB_HOST=localhost
 DB_PORT=5432
-DB_NAME=powtrace
+DB_NAME=pawtrace
 DB_USER=postgres
-DB_PASSWORD=tu_password
-JWT_SECRET=un_secreto_largo_y_aleatorio
+DB_PASSWORD=Yo123
 ```
 
 Creá la base de datos (si no existe):

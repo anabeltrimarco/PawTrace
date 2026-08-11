@@ -1,0 +1,10 @@
+numpy
+requests
+timm
+torch
+torchvision
+fastapi
+pydantic
+Pillow
+PytorchWildlife
+uvicorn[standard]
