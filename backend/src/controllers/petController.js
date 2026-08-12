@@ -47,7 +47,7 @@ async function listar(req, res, next) {
           required: false,
         },
       ],
-      order: [["createdAt", "DESC"]],
+      order: [["created_at", "DESC"]],
     });
 
     return res.json(pets);
