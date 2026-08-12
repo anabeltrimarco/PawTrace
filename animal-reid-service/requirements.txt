@@ -10,3 +10,4 @@ PytorchWildlife
 uvicorn[standard]
 soundfile
 librosa
+setuptools
