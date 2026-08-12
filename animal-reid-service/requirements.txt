@@ -9,3 +9,4 @@ Pillow
 PytorchWildlife
 uvicorn[standard]
 soundfile
+librosa
