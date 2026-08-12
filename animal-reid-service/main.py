@@ -44,10 +44,6 @@ from timm.data import (
     create_transform,
 )
 
-from PytorchWildlife.models import (
-    detection as pw_detection,
-)
-
 
 # ==========================================
 # CONFIGURACIÓN
@@ -89,7 +85,7 @@ CROP_WEIGHT = 0.65
 # ==========================================
 
 app = FastAPI(
-    title="PowTrace Animal Re-ID",
+    title="PawTrace Animal Re-ID",
     version="1.4.3.6.2",
     description=(
         "Re-identificación animal híbrida "
@@ -100,144 +96,146 @@ app = FastAPI(
 
 
 # ==========================================
-# CARGAR MEGADESCRIPTOR
+# LAZY LOADING DE MODELOS
+#
+# Railway puede quedarse sin memoria si
+# cargamos todos los modelos al iniciar.
+# Los modelos se cargan sólo cuando un
+# endpoint de IA realmente los necesita.
 # ==========================================
 
-print(
-    "🐾 Cargando MegaDescriptor..."
-)
-
-mega_model = timm.create_model(
-    MEGA_MODEL_NAME,
-    pretrained=True,
-)
-
-mega_model = mega_model.to(
-    DEVICE
-)
-
-mega_model.eval()
-
-print(
-    f"✅ MegaDescriptor cargado en {DEVICE}"
-)
-
-
-# ==========================================
-# CARGAR DINOV2
-# ==========================================
-
-print(
-    "🦖 Cargando DINOv2..."
-)
-
-dino_model = timm.create_model(
-    DINO_MODEL_NAME,
-    pretrained=True,
-    num_classes=0,
-)
-
-dino_model = dino_model.to(
-    DEVICE
-)
-
-dino_model.eval()
-
-print(
-    f"✅ DINOv2 cargado en {DEVICE}"
-)
-
-
-# ==========================================
-# CARGAR MEGADETECTOR
-# ==========================================
-
-print(
-    "🔎 Cargando MegaDetector..."
-)
-
-detector_model = (
-    pw_detection.MegaDetectorV6(
-        device=DEVICE,
-        pretrained=True,
-        version=MEGADETECTOR_VERSION,
-    )
-)
-
-print(
-    "✅ MegaDetector cargado correctamente."
-)
+mega_model = None
+dino_model = None
+detector_model = None
+dino_transform = None
 
 
 # ==========================================
 # TRANSFORM MEGADESCRIPTOR
-# ==========================================
-
-mega_transform = (
-    transforms.Compose(
-        [
-            transforms.Resize(
-                (384, 384)
-            ),
-
-            transforms.ToTensor(),
-
-            transforms.Normalize(
-                mean=[
-                    0.5,
-                    0.5,
-                    0.5,
-                ],
-                std=[
-                    0.5,
-                    0.5,
-                    0.5,
-                ],
-            ),
-        ]
-    )
-)
-
-
-# ==========================================
-# TRANSFORM DINOV2
 #
-# Usamos configuración propia de timm.
-# No inventamos resize/mean/std.
+# Este transform es liviano y puede quedar
+# preparado desde el inicio.
 # ==========================================
 
-dino_data_config = (
-    resolve_model_data_config(
-        dino_model
-    )
+mega_transform = transforms.Compose(
+    [
+        transforms.Resize((384, 384)),
+        transforms.ToTensor(),
+        transforms.Normalize(
+            mean=[0.5, 0.5, 0.5],
+            std=[0.5, 0.5, 0.5],
+        ),
+    ]
 )
 
-dino_transform = (
-    create_transform(
-        **dino_data_config,
-        is_training=False,
-    )
-)
 
-print(
-    "✅ Transform DINOv2 configurado:",
-    {
-        "input_size":
-            dino_data_config.get(
-                "input_size"
-            ),
+def get_mega_model():
+    global mega_model
 
-        "mean":
-            dino_data_config.get(
-                "mean"
-            ),
+    if mega_model is None:
+        print("🐾 Cargando MegaDescriptor bajo demanda...")
 
-        "std":
-            dino_data_config.get(
-                "std"
-            ),
-    }
-)
+        mega_model = timm.create_model(
+            MEGA_MODEL_NAME,
+            pretrained=True,
+        )
+
+        mega_model = mega_model.to(DEVICE)
+        mega_model.eval()
+
+        print(f"✅ MegaDescriptor cargado en {DEVICE}")
+
+    return mega_model
+
+
+def get_dino_model():
+    global dino_model
+    global dino_transform
+
+    if dino_model is None:
+        print("🦖 Cargando DINOv2 bajo demanda...")
+
+        dino_model = timm.create_model(
+            DINO_MODEL_NAME,
+            pretrained=True,
+            num_classes=0,
+        )
+
+        dino_model = dino_model.to(DEVICE)
+        dino_model.eval()
+
+        dino_data_config = resolve_model_data_config(
+            dino_model
+        )
+
+        dino_transform = create_transform(
+            **dino_data_config,
+            is_training=False,
+        )
+
+        print(
+            "✅ DINOv2 cargado y transform configurado:",
+            {
+                "device": DEVICE,
+                "input_size": dino_data_config.get("input_size"),
+                "mean": dino_data_config.get("mean"),
+                "std": dino_data_config.get("std"),
+            },
+        )
+
+    return dino_model
+
+
+def get_detector_model():
+    global detector_model
+
+    if detector_model is None:
+        print("🔎 Cargando MegaDetector bajo demanda...")
+
+        # Import tardío intencional: PytorchWildlife es pesado
+        # y no debe bloquear el arranque de FastAPI.
+        from PytorchWildlife.models import (
+            detection as pw_detection,
+        )
+
+        detector_model = pw_detection.MegaDetectorV6(
+            device=DEVICE,
+            pretrained=True,
+            version=MEGADETECTOR_VERSION,
+        )
+
+        print("✅ MegaDetector cargado correctamente.")
+
+    return detector_model
+
+
+def release_mega_model():
+    global mega_model
+
+    if mega_model is not None:
+        mega_model = None
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+
+def release_dino_model():
+    global dino_model
+    global dino_transform
+
+    if dino_model is not None:
+        dino_model = None
+        dino_transform = None
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+
+def release_detector_model():
+    global detector_model
+
+    if detector_model is not None:
+        detector_model = None
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
 
 # ==========================================
@@ -395,8 +393,10 @@ def detect_animal(
             image
         )
 
+        model = get_detector_model()
+
         results = (
-            detector_model
+            model
             .single_image_detection(
                 image_np
             )
@@ -821,10 +821,12 @@ def get_mega_embedding(
         .to(DEVICE)
     )
 
+    model = get_mega_model()
+
     with torch.no_grad():
 
         embedding = (
-            mega_model(
+            model(
                 tensor
             )
         )
@@ -858,6 +860,8 @@ def get_dino_embedding(
     image: Image.Image,
 ) -> np.ndarray:
 
+    model = get_dino_model()
+
     tensor = (
         dino_transform(
             image
@@ -869,7 +873,7 @@ def get_dino_embedding(
     with torch.no_grad():
 
         embedding = (
-            dino_model(
+            model(
                 tensor
             )
         )
@@ -1094,7 +1098,7 @@ def health():
             "ok",
 
         "service":
-            "powtrace-animal-reid",
+            "pawtrace-animal-reid",
 
         "version":
             "1.4.3.6.2",
@@ -1112,6 +1116,12 @@ def health():
 
         "device":
             DEVICE,
+
+        "loaded": {
+            "megaDescriptor": mega_model is not None,
+            "dinoV2": dino_model is not None,
+            "detector": detector_model is not None,
+        },
 
         "pipeline": (
             "MegaDetector → "
@@ -1162,6 +1172,10 @@ def embed(
             original
         )
     )
+
+    # La detección ya terminó. Liberamos MegaDetector
+    # antes de cargar MegaDescriptor para bajar el pico de RAM.
+    release_detector_model()
 
     embedding = (
         get_robust_mega_embedding(
@@ -1279,6 +1293,10 @@ def embed_dino(
             original
         )
     )
+
+    # La detección ya terminó. Liberamos MegaDetector
+    # antes de cargar DINOv2 para bajar el pico de RAM.
+    release_detector_model()
 
     embedding = (
         get_robust_dino_embedding(
@@ -1427,6 +1445,10 @@ def compare(
         )
     )
 
+    # Ya no necesitamos el detector. Evitamos mantenerlo
+    # en RAM mientras calculamos los embeddings.
+    release_detector_model()
+
 
     # ======================================
     # MEGADESCRIPTOR
@@ -1450,6 +1472,10 @@ def compare(
             mega_b,
         )
     )
+
+    # MegaDescriptor ya produjo los vectores.
+    # Lo liberamos antes de cargar DINOv2.
+    release_mega_model()
 
 
     # ======================================
@@ -1646,7 +1672,7 @@ def root():
 
     return {
         "service":
-            "PowTrace Animal Re-ID",
+            "PawTrace Animal Re-ID",
 
         "version":
             "Sprint 1.4.3.6.2",
