@@ -10,4 +10,5 @@ PytorchWildlife
 uvicorn[standard]
 soundfile
 librosa
-setuptools
+setuptools==80.10.2
+
