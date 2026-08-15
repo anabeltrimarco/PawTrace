@@ -25,9 +25,9 @@ const PetPhoto =
 const FoundReportPhoto =
   require("./FoundReportPhoto");
 
+
 // ==========================================
 // AVISTAMIENTOS
-// Sprint 1.4.4.1
 // ==========================================
 
 const Sighting =
@@ -264,6 +264,7 @@ FoundReportPhoto.belongsTo(
 
 // ==========================================
 // USER ↔ SIGHTING
+// ==========================================
 //
 // Un usuario puede crear varios
 // avistamientos.
@@ -297,6 +298,7 @@ Sighting.belongsTo(
 
 // ==========================================
 // LOCATION ↔ SIGHTING
+// ==========================================
 //
 // Cada avistamiento puede tener
 // una ubicación.
@@ -330,6 +332,7 @@ Sighting.belongsTo(
 
 // ==========================================
 // SIGHTING ↔ SIGHTING PHOTO
+// ==========================================
 //
 // Un avistamiento puede tener
 // una o varias fotos.
@@ -417,6 +420,41 @@ Match.belongsTo(
 
     as:
       "foundReport",
+  }
+);
+
+
+// ==========================================
+// SIGHTING ↔ MATCH
+// ==========================================
+//
+// Permite que los avistamientos
+// generen coincidencias con
+// mascotas perdidas.
+// ==========================================
+
+Sighting.hasMany(
+  Match,
+  {
+    foreignKey:
+      "sightingId",
+
+    as:
+      "matches",
+
+    onDelete:
+      "CASCADE",
+  }
+);
+
+Match.belongsTo(
+  Sighting,
+  {
+    foreignKey:
+      "sightingId",
+
+    as:
+      "sighting",
   }
 );
 
