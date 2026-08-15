@@ -1,22 +1,11 @@
 // ==========================================
 // PAWTRACE - PHOTO CONTROLLER
 //
-// Sprint 1.4.3.6
-//
 // Fotos de mascotas registradas.
-//
-// Incluye:
-// - Prevención de fotos duplicadas
-// - Hash SHA-256
-// - Eliminación automática del archivo duplicado
-// - Generación persistente de embedding
-//
-// Las fotos de FoundReport se manejan en:
-// foundReportPhotoController.js
+// Cloudinary + prevención de duplicados
+// + Animal Re-ID
 // ==========================================
 
-const fs = require("fs");
-const path = require("path");
 const crypto = require("crypto");
 
 const {
@@ -30,257 +19,58 @@ const {
   "../services/imageEmbeddingService"
 );
 
-
-// ==========================================
-// BORRAR ARCHIVO
-// ==========================================
-
-function deleteUploadedFile(
-  file
-) {
-  if (!file?.path) {
-    return;
-  }
-
-  try {
-    if (
-      fs.existsSync(
-        file.path
-      )
-    ) {
-      fs.unlinkSync(
-        file.path
-      );
-
-      console.log(
-        "🗑️ Archivo eliminado:",
-        file.path
-      );
-    }
-  } catch (error) {
-    console.error(
-      "⚠️ No se pudo borrar archivo:",
-      error.message
-    );
-  }
-}
+const {
+  uploadBuffer,
+  deleteImage,
+} = require(
+  "../services/cloudinaryStorageService"
+);
 
 
 // ==========================================
-// CALCULAR SHA-256 DE ARCHIVO
+// HASH SHA-256 DEL BUFFER
 // ==========================================
 
-function calculateFileHash(
-  filePath
-) {
-  return new Promise(
-    (
-      resolve,
-      reject
-    ) => {
-      const hash =
-        crypto.createHash(
-          "sha256"
-        );
-
-      const stream =
-        fs.createReadStream(
-          filePath
-        );
-
-      stream.on(
-        "data",
-        (chunk) => {
-          hash.update(
-            chunk
-          );
-        }
-      );
-
-      stream.on(
-        "end",
-        () => {
-          resolve(
-            hash.digest(
-              "hex"
-            )
-          );
-        }
-      );
-
-      stream.on(
-        "error",
-        (error) => {
-          reject(
-            error
-          );
-        }
-      );
-    }
-  );
-}
-
-
-// ==========================================
-// OBTENER PATH FÍSICO DE FOTO EXISTENTE
-// ==========================================
-
-function getExistingPhotoPath(
-  uploadedFile,
-  photo
-) {
-  if (
-    !uploadedFile?.path ||
-    !photo?.storageKey
-  ) {
+function calculateBufferHash(buffer) {
+  if (!buffer) {
     return null;
   }
 
-  // req.file.path apunta a:
-  //
-  // backend/uploads/mascotas/NOMBRE.jpeg
-  //
-  // Tomamos la misma carpeta y buscamos
-  // el storageKey de la foto ya guardada.
-
-  const uploadDirectory =
-    path.dirname(
-      uploadedFile.path
-    );
-
-  return path.join(
-    uploadDirectory,
-    photo.storageKey
-  );
+  return crypto
+    .createHash("sha256")
+    .update(buffer)
+    .digest("hex");
 }
 
 
 // ==========================================
 // BUSCAR FOTO DUPLICADA
+//
+// Para las nuevas fotos Cloudinary usamos
+// el hash como parte del storageKey.
 // ==========================================
 
 async function findDuplicatePhoto({
   petId,
-  uploadedFile,
+  fileHash,
 }) {
-  if (
-    !uploadedFile?.path ||
-    !fs.existsSync(
-      uploadedFile.path
-    )
-  ) {
+  if (!fileHash) {
     return null;
   }
 
-  // ========================================
-  // HASH DEL ARCHIVO NUEVO
-  // ========================================
-
-  const newHash =
-    await calculateFileHash(
-      uploadedFile.path
-    );
-
-  console.log(
-    "🔐 SHA-256 foto nueva:",
-    newHash
-  );
-
-  // ========================================
-  // FOTOS EXISTENTES DE ESA MASCOTA
-  // ========================================
-
-  const existingPhotos =
+  const photos =
     await PetPhoto.findAll({
       where: {
         petId,
       },
     });
 
-  if (
-    existingPhotos.length ===
-    0
-  ) {
-    return null;
-  }
-
-  // ========================================
-  // COMPARAR CONTENIDO REAL
-  // ========================================
-
-  for (
-    const existingPhoto of
-    existingPhotos
-  ) {
-    const existingPath =
-      getExistingPhotoPath(
-        uploadedFile,
-        existingPhoto
-      );
-
-    if (
-      !existingPath ||
-      !fs.existsSync(
-        existingPath
-      )
-    ) {
-      continue;
-    }
-
-    try {
-      const existingHash =
-        await calculateFileHash(
-          existingPath
-        );
-
-      if (
-        existingHash ===
-        newHash
-      ) {
-        console.log(
-          "♻️ Foto duplicada detectada:",
-          {
-            petId,
-            existingPhotoId:
-              existingPhoto.id,
-
-            storageKey:
-              existingPhoto.storageKey,
-          }
-        );
-
-        return existingPhoto;
-      }
-    } catch (error) {
-      console.error(
-        "⚠️ No se pudo calcular hash de foto existente:",
-        {
-          photoId:
-            existingPhoto.id,
-
-          error:
-            error.message,
-        }
-      );
-    }
-  }
-
-  return null;
-}
-
-
-// ==========================================
-// URL PÚBLICA PET
-// ==========================================
-
-function buildPetPhotoUrl(
-  req,
-  filename
-) {
   return (
-    `${req.protocol}://` +
-    `${req.get("host")}` +
-    `/uploads/mascotas/${filename}`
+    photos.find((photo) =>
+      photo.storageKey?.includes(
+        fileHash
+      )
+    ) || null
   );
 }
 
@@ -296,7 +86,15 @@ async function uploadPetPhoto(
   res,
   next
 ) {
+  let cloudinaryPublicId =
+    null;
+
   try {
+
+    // ======================================
+    // ID DE MASCOTA
+    // ======================================
+
     const { id } =
       req.params;
 
@@ -305,7 +103,10 @@ async function uploadPetPhoto(
     // VALIDAR ARCHIVO
     // ======================================
 
-    if (!req.file) {
+    if (
+      !req.file ||
+      !req.file.buffer
+    ) {
       return res
         .status(400)
         .json({
@@ -325,10 +126,6 @@ async function uploadPetPhoto(
       );
 
     if (!pet) {
-      deleteUploadedFile(
-        req.file
-      );
-
       return res
         .status(404)
         .json({
@@ -339,51 +136,36 @@ async function uploadPetPhoto(
 
 
     // ======================================
-    // DETECTAR FOTO DUPLICADA
+    // HASH DE LA IMAGEN
     // ======================================
 
-    let duplicatePhoto =
-      null;
-
-    try {
-      duplicatePhoto =
-        await findDuplicatePhoto({
-          petId:
-            id,
-
-          uploadedFile:
-            req.file,
-        });
-    } catch (hashError) {
-      // Si falla el chequeo del hash,
-      // no bloqueamos la subida.
-
-      console.error(
-        "⚠️ Error verificando foto duplicada:",
-        hashError.message
+    const fileHash =
+      calculateBufferHash(
+        req.file.buffer
       );
-    }
+
+    console.log(
+      "🔐 SHA-256 foto nueva:",
+      fileHash
+    );
 
 
     // ======================================
-    // SI YA EXISTE:
-    //
-    // 1. Borramos la copia recién subida.
-    // 2. No creamos PetPhoto.
-    // 3. No generamos otro embedding.
+    // DETECTAR DUPLICADO
     // ======================================
+
+    const duplicatePhoto =
+      await findDuplicatePhoto({
+        petId: id,
+        fileHash,
+      });
 
     if (duplicatePhoto) {
-      deleteUploadedFile(
-        req.file
-      );
 
       console.log(
-        "♻️ Se reutiliza foto existente:",
+        "♻️ Foto duplicada detectada:",
         {
-          petId:
-            id,
-
+          petId: id,
           photoId:
             duplicatePhoto.id,
         }
@@ -394,8 +176,7 @@ async function uploadPetPhoto(
         .json({
           ...duplicatePhoto.toJSON(),
 
-          duplicate:
-            true,
+          duplicate: true,
 
           message:
             "Esta foto ya estaba cargada para la mascota.",
@@ -404,14 +185,50 @@ async function uploadPetPhoto(
 
 
     // ======================================
-    // URL PÚBLICA
+    // SUBIR A CLOUDINARY
     // ======================================
 
-    const imageUrl =
-      buildPetPhotoUrl(
-        req,
-        req.file.filename
+    console.log(
+      "☁️ Subiendo foto de mascota a Cloudinary..."
+    );
+
+    const uploadResult =
+      await uploadBuffer({
+        buffer:
+          req.file.buffer,
+
+        folder:
+          `pawtrace/pets/${id}`,
+
+        publicId:
+          fileHash,
+      });
+
+
+    if (
+      !uploadResult?.secure_url ||
+      !uploadResult?.public_id
+    ) {
+      throw new Error(
+        "Cloudinary no devolvió una URL válida."
       );
+    }
+
+
+    cloudinaryPublicId =
+      uploadResult.public_id;
+
+
+    console.log(
+      "☁️ Foto subida a Cloudinary:",
+      {
+        publicId:
+          uploadResult.public_id,
+
+        secureUrl:
+          uploadResult.secure_url,
+      }
+    );
 
 
     // ======================================
@@ -421,28 +238,31 @@ async function uploadPetPhoto(
     const existingMain =
       await PetPhoto.findOne({
         where: {
-          petId:
-            id,
-
-          isMain:
-            true,
+          petId: id,
+          isMain: true,
         },
       });
 
 
     // ======================================
-    // GUARDAR FOTO NUEVA
+    // GUARDAR EN POSTGRESQL
+    //
+    // imageUrl:
+    // URL HTTPS permanente Cloudinary
+    //
+    // storageKey:
+    // public_id Cloudinary
     // ======================================
 
     const photo =
       await PetPhoto.create({
-        petId:
-          id,
+        petId: id,
 
-        imageUrl,
+        imageUrl:
+          uploadResult.secure_url,
 
         storageKey:
-          req.file.filename,
+          uploadResult.public_id,
 
         isMain:
           existingMain
@@ -451,19 +271,27 @@ async function uploadPetPhoto(
       });
 
 
+    // Desde este momento la imagen
+    // pertenece al registro persistido.
+    // No debe borrarse si falla solamente IA.
+
+    cloudinaryPublicId =
+      null;
+
+
     console.log(
       "✅ Foto de mascota guardada:",
       {
-        petId:
-          id,
+        petId: id,
 
         photoId:
           photo.id,
 
-        imageUrl,
+        imageUrl:
+          photo.imageUrl,
 
-        filename:
-          req.file.filename,
+        storageKey:
+          photo.storageKey,
       }
     );
 
@@ -471,12 +299,12 @@ async function uploadPetPhoto(
     // ======================================
     // GENERAR EMBEDDING
     //
-    // Si la IA falla:
-    // - la foto permanece guardada
-    // - la petición sigue siendo válida
+    // Cloudinary ya proporciona una URL
+    // HTTPS pública y persistente.
     // ======================================
 
     try {
+
       const embedding =
         await getOrCreateEmbedding({
           entityType:
@@ -488,6 +316,7 @@ async function uploadPetPhoto(
           imageUrl:
             photo.imageUrl,
         });
+
 
       console.log(
         "🧠 Embedding PetPhoto listo:",
@@ -510,6 +339,11 @@ async function uploadPetPhoto(
     } catch (
       embeddingError
     ) {
+
+      // IMPORTANTE:
+      // Un fallo de Animal Re-ID
+      // NO elimina la foto.
+
       console.error(
         "⚠️ No se pudo generar embedding PetPhoto:",
         embeddingError.message
@@ -528,18 +362,32 @@ async function uploadPetPhoto(
 
         duplicate:
           false,
+
+        storage:
+          "cloudinary",
       });
 
   } catch (error) {
 
     // ======================================
-    // Si ocurrió un error antes de completar
-    // correctamente la operación,
-    // eliminamos el archivo subido.
+    // LIMPIEZA CLOUDINARY
+    //
+    // Si Cloudinary recibió la imagen pero
+    // falló PostgreSQL, eliminamos la imagen
+    // para no dejar archivos huérfanos.
     // ======================================
 
-    deleteUploadedFile(
-      req.file
+    if (
+      cloudinaryPublicId
+    ) {
+      await deleteImage(
+        cloudinaryPublicId
+      );
+    }
+
+    console.error(
+      "❌ Error subiendo foto de mascota:",
+      error
     );
 
     next(error);
@@ -548,7 +396,7 @@ async function uploadPetPhoto(
 
 
 // ==========================================
-// EXPORTS
+// EXPORT
 // ==========================================
 
 module.exports = {

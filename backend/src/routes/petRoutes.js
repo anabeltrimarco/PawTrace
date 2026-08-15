@@ -1,64 +1,118 @@
-const express = require("express");
-const { body } = require("express-validator");
+const express =
+  require("express");
 
-const controller = require("../controllers/petController");
+const {
+  body,
+} = require(
+  "express-validator"
+);
 
-const upload = require("../middleware/upload");
+const controller =
+  require(
+    "../controllers/petController"
+  );
+
+// ==========================================
+// CLOUDINARY UPLOAD
+// ==========================================
+
+const {
+  uploadImage,
+} = require(
+  "../middleware/cloudinaryUpload"
+);
 
 const {
   uploadPetPhoto,
-} = require("../controllers/photoController");
+} = require(
+  "../controllers/photoController"
+);
 
-const router = express.Router();
+const router =
+  express.Router();
 
-// =========================
+
+// ==========================================
 // GET
-// =========================
+// ==========================================
 
-router.get("/", controller.listar);
+router.get(
+  "/",
+  controller.listar
+);
 
-router.get("/:id", controller.obtener);
+router.get(
+  "/:id",
+  controller.obtener
+);
 
-// =========================
-// POST
-// =========================
+
+// ==========================================
+// POST - CREAR MASCOTA
+// ==========================================
 
 router.post(
   "/",
   [
     body("species")
       .notEmpty()
-      .withMessage("La especie es obligatoria."),
+      .withMessage(
+        "La especie es obligatoria."
+      ),
   ],
   controller.crear
 );
 
-// =========================
-// POST FOTO
-// =========================
+
+// ==========================================
+// POST - FOTO DE MASCOTA
+//
+// La imagen:
+// navegador
+//   ↓
+// Multer memoryStorage
+//   ↓
+// req.file.buffer
+//   ↓
+// Cloudinary
+//   ↓
+// PostgreSQL guarda URL HTTPS
+// ==========================================
 
 router.post(
   "/:id/photos",
-  upload.single("photo"),
+
+  uploadImage.single(
+    "photo"
+  ),
+
   uploadPetPhoto
 );
 
-// =========================
+
+// ==========================================
 // PUT
-// =========================
+// ==========================================
 
 router.put(
   "/:id",
   controller.actualizar
 );
 
-// =========================
+
+// ==========================================
 // DELETE
-// =========================
+// ==========================================
 
 router.delete(
   "/:id",
   controller.eliminar
 );
 
-module.exports = router;
+
+// ==========================================
+// EXPORT
+// ==========================================
+
+module.exports =
+  router;
