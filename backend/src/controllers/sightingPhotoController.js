@@ -1,10 +1,8 @@
 // ==========================================
 // PAWTRACE - SIGHTING PHOTO CONTROLLER
-// Sprint 1.4.4.2
+// Cloudinary + SHA-256 + Animal Re-ID
 // ==========================================
 
-const fs = require("fs");
-const path = require("path");
 const crypto = require("crypto");
 
 const {
@@ -14,198 +12,59 @@ const {
 
 const {
   getOrCreateEmbedding,
-} = require(
-  "../services/imageEmbeddingService"
-);
+} = require("../services/imageEmbeddingService");
 
-// ==========================================
-// URL PÚBLICA
-// ==========================================
+const {
+  uploadBuffer,
+  deleteImage,
+} = require("../services/cloudinaryStorageService");
 
-function buildPublicUrl(
-  req,
-  filename
-) {
-  return (
-    `${req.protocol}://` +
-    `${req.get("host")}` +
-    `/uploads/sightings/${filename}`
-  );
-}
-
-// ==========================================
-// BORRAR ARCHIVO
-// ==========================================
-
-function deleteUploadedFile(file) {
-  if (!file?.path) {
-    return;
-  }
-
-  try {
-    if (fs.existsSync(file.path)) {
-      fs.unlinkSync(file.path);
-
-      console.log(
-        "🗑️ Foto de avistamiento eliminada:",
-        file.path
-      );
-    }
-  } catch (error) {
-    console.error(
-      "⚠️ No se pudo borrar archivo:",
-      error.message
-    );
-  }
-}
 
 // ==========================================
 // SHA-256
 // ==========================================
 
-function calculateFileHash(
-  filePath
-) {
-  return new Promise(
-    (resolve, reject) => {
-      const hash =
-        crypto.createHash(
-          "sha256"
-        );
+function calculateBufferHash(buffer) {
+  if (!buffer) return null;
 
-      const stream =
-        fs.createReadStream(
-          filePath
-        );
-
-      stream.on(
-        "data",
-        (chunk) => {
-          hash.update(chunk);
-        }
-      );
-
-      stream.on(
-        "end",
-        () => {
-          resolve(
-            hash.digest("hex")
-          );
-        }
-      );
-
-      stream.on(
-        "error",
-        reject
-      );
-    }
-  );
+  return crypto
+    .createHash("sha256")
+    .update(buffer)
+    .digest("hex");
 }
 
-// ==========================================
-// PATH DE FOTO EXISTENTE
-// ==========================================
-
-function getExistingPhotoPath(
-  uploadedFile,
-  photo
-) {
-  if (
-    !uploadedFile?.path ||
-    !photo?.storageKey
-  ) {
-    return null;
-  }
-
-  const uploadDirectory =
-    path.dirname(
-      uploadedFile.path
-    );
-
-  return path.join(
-    uploadDirectory,
-    photo.storageKey
-  );
-}
 
 // ==========================================
-// DETECTAR DUPLICADO
+// DUPLICADOS
 // ==========================================
 
 async function findDuplicatePhoto({
   sightingId,
-  uploadedFile,
+  fileHash,
 }) {
-  if (
-    !uploadedFile?.path ||
-    !fs.existsSync(
-      uploadedFile.path
-    )
-  ) {
-    return null;
-  }
+  if (!fileHash) return null;
 
-  const newHash =
-    await calculateFileHash(
-      uploadedFile.path
-    );
-
-  console.log(
-    "🔐 SHA-256 foto avistamiento:",
-    newHash
-  );
-
-  const existingPhotos =
+  const photos =
     await SightingPhoto.findAll({
       where: {
         sightingId,
       },
     });
 
-  for (
-    const existingPhoto of
-    existingPhotos
-  ) {
-    const existingPath =
-      getExistingPhotoPath(
-        uploadedFile,
-        existingPhoto
-      );
-
-    if (
-      !existingPath ||
-      !fs.existsSync(
-        existingPath
-      )
-    ) {
-      continue;
-    }
-
-    const existingHash =
-      await calculateFileHash(
-        existingPath
-      );
-
-    if (
-      existingHash ===
-      newHash
-    ) {
-      return existingPhoto;
-    }
-  }
-
-  return null;
+  return (
+    photos.find((photo) =>
+      photo.storageKey?.includes(fileHash)
+    ) || null
+  );
 }
 
+
 // ==========================================
-// GET /api/sightings/:id/photos
+// GET
+// /api/sightings/:id/photos
 // ==========================================
 
-async function listar(
-  req,
-  res,
-  next
-) {
+async function listar(req, res, next) {
   try {
     const sighting =
       await Sighting.findByPk(
@@ -213,12 +72,10 @@ async function listar(
       );
 
     if (!sighting) {
-      return res
-        .status(404)
-        .json({
-          error:
-            "Avistamiento no encontrado.",
-        });
+      return res.status(404).json({
+        error:
+          "Avistamiento no encontrado.",
+      });
     }
 
     const photos =
@@ -229,44 +86,43 @@ async function listar(
         },
 
         order: [
-          [
-            "isMain",
-            "DESC",
-          ],
-          [
-            "createdAt",
-            "ASC",
-          ],
+          ["isMain", "DESC"],
+          ["createdAt", "ASC"],
         ],
       });
 
-    return res.json(
-      photos
-    );
+    return res.json(photos);
 
   } catch (error) {
     next(error);
   }
 }
 
+
 // ==========================================
-// POST /api/sightings/:id/photos
+// POST
+// /api/sightings/:id/photos
 // ==========================================
 
-async function crear(
-  req,
-  res,
-  next
-) {
+async function crear(req, res, next) {
+  let cloudinaryPublicId = null;
+
   try {
-    if (!req.file) {
-      return res
-        .status(400)
-        .json({
-          error:
-            "Tenés que seleccionar una imagen.",
-        });
+
+    // ======================================
+    // ARCHIVO
+    // ======================================
+
+    if (
+      !req.file ||
+      !req.file.buffer
+    ) {
+      return res.status(400).json({
+        error:
+          "Tenés que seleccionar una imagen.",
+      });
     }
+
 
     // ======================================
     // AVISTAMIENTO
@@ -278,58 +134,92 @@ async function crear(
       );
 
     if (!sighting) {
-      deleteUploadedFile(
-        req.file
+      return res.status(404).json({
+        error:
+          "Avistamiento no encontrado.",
+      });
+    }
+
+
+    // ======================================
+    // HASH
+    // ======================================
+
+    const fileHash =
+      calculateBufferHash(
+        req.file.buffer
       );
 
-      return res
-        .status(404)
-        .json({
-          error:
-            "Avistamiento no encontrado.",
-        });
-    }
+    console.log(
+      "🔐 SHA-256 foto avistamiento:",
+      fileHash
+    );
+
 
     // ======================================
     // DUPLICADO
     // ======================================
 
-    let duplicatePhoto =
-      null;
+    const duplicatePhoto =
+      await findDuplicatePhoto({
+        sightingId:
+          sighting.id,
 
-    try {
-      duplicatePhoto =
-        await findDuplicatePhoto({
-          sightingId:
-            sighting.id,
-
-          uploadedFile:
-            req.file,
-        });
-    } catch (error) {
-      console.error(
-        "⚠️ Error verificando duplicado:",
-        error.message
-      );
-    }
+        fileHash,
+      });
 
     if (duplicatePhoto) {
-      deleteUploadedFile(
-        req.file
-      );
+      return res.status(200).json({
+        ...duplicatePhoto.toJSON(),
 
-      return res
-        .status(200)
-        .json({
-          ...duplicatePhoto.toJSON(),
+        duplicate: true,
 
-          duplicate:
-            true,
-
-          message:
-            "Esta foto ya estaba cargada para el avistamiento.",
-        });
+        message:
+          "Esta foto ya estaba cargada para el avistamiento.",
+      });
     }
+
+
+    // ======================================
+    // CLOUDINARY
+    // ======================================
+
+    console.log(
+      "☁️ Subiendo avistamiento a Cloudinary..."
+    );
+
+    const uploadResult =
+      await uploadBuffer({
+        buffer:
+          req.file.buffer,
+
+        folder:
+          `pawtrace/sightings/${sighting.id}`,
+
+        publicId:
+          fileHash,
+      });
+
+
+    if (
+      !uploadResult?.secure_url ||
+      !uploadResult?.public_id
+    ) {
+      throw new Error(
+        "Cloudinary no devolvió una URL válida."
+      );
+    }
+
+
+    cloudinaryPublicId =
+      uploadResult.public_id;
+
+
+    console.log(
+      "☁️ Sighting subida:",
+      uploadResult.secure_url
+    );
+
 
     // ======================================
     // FOTO PRINCIPAL
@@ -346,18 +236,9 @@ async function crear(
     const isMain =
       photosCount === 0;
 
-    // ======================================
-    // URL
-    // ======================================
-
-    const imageUrl =
-      buildPublicUrl(
-        req,
-        req.file.filename
-      );
 
     // ======================================
-    // GUARDAR
+    // POSTGRESQL
     // ======================================
 
     const photo =
@@ -365,29 +246,36 @@ async function crear(
         sightingId:
           sighting.id,
 
-        imageUrl,
+        imageUrl:
+          uploadResult.secure_url,
 
         storageKey:
-          req.file.filename,
+          uploadResult.public_id,
 
         isMain,
       });
 
-    console.log(
-      "📷 Foto de avistamiento guardada:",
-      {
-        sightingId:
-          sighting.id,
 
+    cloudinaryPublicId = null;
+
+
+    console.log(
+      "✅ SightingPhoto guardada:",
+      {
         photoId:
           photo.id,
 
-        imageUrl,
+        imageUrl:
+          photo.imageUrl,
+
+        storageKey:
+          photo.storageKey,
       }
     );
 
+
     // ======================================
-    // EMBEDDING
+    // ANIMAL RE-ID
     // ======================================
 
     try {
@@ -410,45 +298,48 @@ async function crear(
             photo.id,
 
           embeddingSize:
-            embedding
-              ?.embeddingSize ??
+            embedding?.embeddingSize ??
             null,
 
           processingMode:
-            embedding
-              ?.processingMode ??
+            embedding?.processingMode ??
             null,
         }
       );
 
-    } catch (
-      embeddingError
-    ) {
-      // La foto queda guardada aunque
-      // el servicio de IA falle.
+    } catch (embeddingError) {
       console.error(
         "⚠️ No se pudo generar embedding SightingPhoto:",
         embeddingError.message
       );
     }
 
-    return res
-      .status(201)
-      .json({
-        ...photo.toJSON(),
 
-        duplicate:
-          false,
-      });
+    return res.status(201).json({
+      ...photo.toJSON(),
+
+      duplicate: false,
+
+      storage: "cloudinary",
+    });
 
   } catch (error) {
-    deleteUploadedFile(
-      req.file
+
+    if (cloudinaryPublicId) {
+      await deleteImage(
+        cloudinaryPublicId
+      );
+    }
+
+    console.error(
+      "❌ Error subiendo SightingPhoto:",
+      error
     );
 
     next(error);
   }
 }
+
 
 // ==========================================
 // EXPORT

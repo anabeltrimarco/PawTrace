@@ -1,15 +1,11 @@
 // ==========================================
 // PAWTRACE - SIGHTING ROUTES
-//
-// Sprint 1.4.4.2
-// Avistamientos + Fotos
+// Avistamientos + Cloudinary
 // ==========================================
 
-const express =
-  require("express");
+const express = require("express");
 
-const router =
-  express.Router();
+const router = express.Router();
 
 
 // ==========================================
@@ -38,13 +34,13 @@ const photoController =
 
 
 // ==========================================
-// UPLOAD FOTOS
+// CLOUDINARY UPLOAD
 // ==========================================
 
 const {
-  uploadSightingPhoto,
+  uploadImage,
 } = require(
-  "../middleware/sightingUpload"
+  "../middleware/cloudinaryUpload"
 );
 
 
@@ -63,12 +59,8 @@ router.get(
 // FOTOS
 //
 // IMPORTANTE:
-// Estas rutas deben estar ANTES de /:id
+// Antes de /:id
 // ==========================================
-
-
-// GET
-// Fotos de un avistamiento
 
 router.get(
   "/:id/photos",
@@ -76,23 +68,17 @@ router.get(
 );
 
 
-// POST
-// Subir foto de un avistamiento
-
 router.post(
   "/:id/photos",
 
-  uploadSightingPhoto.single(
-    "photo"
-  ),
+  uploadImage.single("photo"),
 
   photoController.crear
 );
 
 
 // ==========================================
-// GET
-// Avistamiento individual
+// GET INDIVIDUAL
 // ==========================================
 
 router.get(
@@ -114,7 +100,6 @@ router.post(
 
 // ==========================================
 // PUT
-// Actualizar avistamiento
 // ==========================================
 
 router.put(
@@ -125,10 +110,6 @@ router.put(
 
 // ==========================================
 // DELETE
-// Eliminar avistamiento
-//
-// Sighting usa paranoid=true,
-// por lo que realiza soft delete.
 // ==========================================
 
 router.delete(
@@ -141,5 +122,4 @@ router.delete(
 // EXPORT
 // ==========================================
 
-module.exports =
-  router;
+module.exports = router;

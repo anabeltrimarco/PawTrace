@@ -1,10 +1,8 @@
-const express =
-  require("express");
+const express = require("express");
 
 const {
   body,
-} =
-  require("express-validator");
+} = require("express-validator");
 
 const controller =
   require("../controllers/foundReportController");
@@ -12,13 +10,16 @@ const controller =
 const photoController =
   require("../controllers/foundReportPhotoController");
 
-const {
-  uploadFoundReportPhoto,
-} =
-  require("../middleware/foundReportUpload");
+// ==========================================
+// CLOUDINARY UPLOAD
+// ==========================================
 
-const router =
-  express.Router();
+const {
+  uploadImage,
+} = require("../middleware/cloudinaryUpload");
+
+const router = express.Router();
+
 
 // ==========================================
 // GET REPORTES
@@ -29,13 +30,12 @@ router.get(
   controller.listar
 );
 
+
 // ==========================================
 // FOTOS
 //
 // IMPORTANTE:
-// Estas rutas deben estar antes de
-// cualquier ruta genérica que pueda
-// interferir.
+// Estas rutas deben estar antes de /:id
 // ==========================================
 
 router.get(
@@ -43,13 +43,15 @@ router.get(
   photoController.listar
 );
 
+
 router.post(
   "/:id/photos",
-  uploadFoundReportPhoto.single(
-    "photo"
-  ),
+
+  uploadImage.single("photo"),
+
   photoController.crear
 );
+
 
 // ==========================================
 // GET UN REPORTE
@@ -59,6 +61,7 @@ router.get(
   "/:id",
   controller.obtener
 );
+
 
 // ==========================================
 // POST REPORTE
@@ -83,6 +86,7 @@ router.post(
   controller.crear
 );
 
+
 // ==========================================
 // PUT
 // ==========================================
@@ -91,6 +95,7 @@ router.put(
   "/:id",
   controller.actualizar
 );
+
 
 // ==========================================
 // DELETE
@@ -101,5 +106,9 @@ router.delete(
   controller.eliminar
 );
 
-module.exports =
-  router;
+
+// ==========================================
+// EXPORT
+// ==========================================
+
+module.exports = router;
