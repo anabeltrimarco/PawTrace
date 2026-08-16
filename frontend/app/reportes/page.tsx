@@ -567,7 +567,13 @@ export default function ReportesPage() {
 
             <div className="reportes-grid">
               {reportes.map(
-                (reporte) => (
+                (reporte) => {
+                  const fotoReporte =
+                    reporte.foto ||
+                    reporte.mascota?.foto ||
+                    null;
+
+                  return (
                   <article
                     className="reporte-card"
                     key={
@@ -577,15 +583,9 @@ export default function ReportesPage() {
                     {/* FOTO */}
 
                     <div className="reporte-foto">
-                      {reporte
-                        .mascota
-                        ?.foto ? (
+                      {fotoReporte ? (
                         <Image
-                          src={
-                            reporte
-                              .mascota
-                              .foto
-                          }
+                          src={fotoReporte}
                           alt={
                             reporte
                               .mascota
@@ -698,7 +698,8 @@ export default function ReportesPage() {
                       </div>
                     </div>
                   </article>
-                )
+                  );
+                }
               )}
             </div>
           </>
