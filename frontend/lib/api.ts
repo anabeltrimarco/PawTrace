@@ -914,6 +914,63 @@ export async function eliminarPet(
   );
 }
 
+
+
+// ==========================================
+// FOTOS / CLOUDINARY
+// ==========================================
+
+async function uploadPhoto<T>(
+  path: string,
+  file: File
+): Promise<T> {
+  const formData = new FormData();
+  formData.append("photo", file);
+
+  const response = await fetch(
+    `${API_URL}${path}`,
+    {
+      method: "POST",
+      headers: {
+        ...getAuthHeaders(),
+      },
+      body: formData,
+    }
+  );
+
+  return handleResponse<T>(response);
+}
+
+export async function subirFotoPet(
+  petId: string,
+  file: File
+): Promise<PetPhoto> {
+  return uploadPhoto<PetPhoto>(
+    `/pets/${petId}/photos`,
+    file
+  );
+}
+
+export async function subirFotoFoundReport(
+  foundReportId: string,
+  file: File
+): Promise<FoundReportPhoto> {
+  return uploadPhoto<FoundReportPhoto>(
+    `/found-reports/${foundReportId}/photos`,
+    file
+  );
+}
+
+export async function subirFotoSighting(
+  sightingId: string,
+  file: File
+): Promise<SightingPhoto> {
+  return uploadPhoto<SightingPhoto>(
+    `/sightings/${sightingId}/photos`,
+    file
+  );
+}
+
 // ==========================================
 // LOST REPORTS
 // ==========================================
@@ -2037,7 +2094,7 @@ export async function crearMascota(
     );
   }
 
-  return crearPet({
+  const pet = await crearPet({
     name:
       input.nombre ||
       null,
@@ -2064,6 +2121,20 @@ export async function crearMascota(
       input.descripcion ||
       null,
   });
+
+  if (input.foto) {
+    const photo = await subirFotoPet(
+      pet.id,
+      input.foto
+    );
+
+    return {
+      ...pet,
+      photos: [photo],
+    };
+  }
+
+  return pet;
 }
 
 // ==========================================
