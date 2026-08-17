@@ -12,6 +12,7 @@ import Link from "next/link";
 import FilterBar from "../../components/FilterBar";
 
 import {
+  actualizarLostReport,
   listarReportes,
   Reporte,
 } from "../../lib/api";
@@ -24,16 +25,27 @@ type TipoFiltro =
   | "encontrado"
   | "avistamiento";
 
-const etiquetaTipo: Record<string, string> = {
+const etiquetaTipo: Record<
+  string,
+  string
+> = {
   perdido: "Perdida",
   encontrado: "Encontrada",
   avistamiento: "Avistamiento",
 };
 
-const claseTipo: Record<string, string> = {
-  perdido: "badge-tipo perdido",
-  encontrado: "badge-tipo encontrado",
-  avistamiento: "badge-tipo avistamiento",
+const claseTipo: Record<
+  string,
+  string
+> = {
+  perdido:
+    "badge-tipo perdido",
+
+  encontrado:
+    "badge-tipo encontrado",
+
+  avistamiento:
+    "badge-tipo avistamiento",
 };
 
 export default function ReportesPage() {
@@ -46,6 +58,7 @@ export default function ReportesPage() {
 
   // Reportes sin filtro de tipo.
   // Los usamos para mantener los KPIs completos.
+
   const [
     reportesEstadisticas,
     setReportesEstadisticas,
@@ -55,7 +68,27 @@ export default function ReportesPage() {
     useState(true);
 
   const [error, setError] =
-    useState<string | null>(null);
+    useState<string | null>(
+      null
+    );
+
+  // ==========================================
+  // ACTUALIZAR REPORTE PERDIDO
+  // ==========================================
+
+  const [
+    actualizandoId,
+    setActualizandoId,
+  ] = useState<string | null>(
+    null
+  );
+
+  const [
+    mensaje,
+    setMensaje,
+  ] = useState<string | null>(
+    null
+  );
 
   // ==========================================
   // FILTROS
@@ -140,7 +173,7 @@ export default function ReportesPage() {
   // Importante:
   // NO enviamos "tipo".
   //
-  // Así los 4 contadores continúan mostrando
+  // Así los contadores continúan mostrando
   // todos los tipos aunque el usuario pulse
   // Perdidos o Encontrados.
   // ==========================================
@@ -175,35 +208,144 @@ export default function ReportesPage() {
   ]);
 
   // ==========================================
+  // MARCAR MASCOTA COMO ENCONTRADA
+  // ==========================================
+
+  async function marcarComoEncontrada(
+    reporte: Reporte
+  ) {
+    if (
+      reporte.tipo !==
+        "perdido" ||
+      reporte.estado !==
+        "active"
+    ) {
+      return;
+    }
+
+    const nombre =
+      reporte.mascota
+        ?.nombre ||
+      "esta mascota";
+
+    const confirmar =
+      window.confirm(
+        `¿Confirmás que ${nombre} ya apareció?\n\nEl reporte dejará de estar activo como mascota perdida.`
+      );
+
+    if (!confirmar) {
+      return;
+    }
+
+    try {
+      setActualizandoId(
+        reporte.id
+      );
+
+      setError(null);
+      setMensaje(null);
+
+      await actualizarLostReport(
+        reporte.id,
+        {
+          status:
+            "resolved",
+        }
+      );
+
+      // Actualizamos la tarjeta sin
+      // tener que recargar toda la página.
+
+      setReportes(
+        (actuales) =>
+          actuales.map(
+            (item) =>
+              item.id ===
+              reporte.id
+                ? {
+                    ...item,
+                    estado:
+                      "resolved",
+                  }
+                : item
+          )
+      );
+
+      // También actualizamos los datos
+      // utilizados por los KPIs.
+
+      setReportesEstadisticas(
+        (actuales) =>
+          actuales.map(
+            (item) =>
+              item.id ===
+              reporte.id
+                ? {
+                    ...item,
+                    estado:
+                      "resolved",
+                  }
+                : item
+          )
+      );
+
+      setMensaje(
+        `${nombre} fue marcada como encontrada.`
+      );
+    } catch (err) {
+      console.error(
+        "Error marcando reporte como encontrado:",
+        err
+      );
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : "No pudimos actualizar el reporte."
+      );
+    } finally {
+      setActualizandoId(
+        null
+      );
+    }
+  }
+
+  // ==========================================
   // ESTADÍSTICAS
   // ==========================================
 
   const estadisticas =
     useMemo(() => {
+      // Solo contamos como "perdidas"
+      // las que siguen activas.
+
       const perdidos =
         reportesEstadisticas.filter(
           (reporte) =>
             reporte.tipo ===
-            "perdido"
+              "perdido" &&
+            reporte.estado ===
+              "active"
         ).length;
 
       const encontrados =
         reportesEstadisticas.filter(
           (reporte) =>
             reporte.tipo ===
-            "encontrado"
+              "encontrado"
         ).length;
 
       const avistamientos =
         reportesEstadisticas.filter(
           (reporte) =>
             reporte.tipo ===
-            "avistamiento"
+              "avistamiento"
         ).length;
 
       return {
         total:
-          reportesEstadisticas.length,
+          reportesEstadisticas
+            .length,
 
         perdidos,
 
@@ -235,6 +377,47 @@ export default function ReportesPage() {
     setQ("");
   }
 
+  // ==========================================
+  // FORMATEAR RECOMPENSA
+  // ==========================================
+
+  function formatearRecompensa(
+    valor:
+      | string
+      | number
+      | null
+  ) {
+    if (
+      valor === null ||
+      valor === undefined ||
+      valor === ""
+    ) {
+      return null;
+    }
+
+    const numero =
+      Number(valor);
+
+    if (
+      !Number.isFinite(
+        numero
+      ) ||
+      numero <= 0
+    ) {
+      return null;
+    }
+
+    return numero.toLocaleString(
+      "es-AR",
+      {
+        style: "currency",
+        currency: "ARS",
+        maximumFractionDigits:
+          0,
+      }
+    );
+  }
+
   return (
     <main className="container reportes-page">
       {/* ======================================
@@ -260,6 +443,19 @@ export default function ReportesPage() {
           por la comunidad.
         </p>
       </header>
+
+      {/* ======================================
+          MENSAJE DE ÉXITO
+      ====================================== */}
+
+      {mensaje && (
+        <div
+          className="form-alert success"
+          role="status"
+        >
+          ✅ {mensaje}
+        </div>
+      )}
 
       {/* ======================================
           KPIs INTERACTIVOS
@@ -290,7 +486,9 @@ export default function ReportesPage() {
           </div>
 
           <strong>
-            {estadisticas.total}
+            {
+              estadisticas.total
+            }
           </strong>
 
           <span className="reporte-stat-label">
@@ -307,7 +505,8 @@ export default function ReportesPage() {
         <button
           type="button"
           className={`reporte-stat-card perdido ${
-            tipo === "perdido"
+            tipo ===
+            "perdido"
               ? "activo"
               : ""
           }`}
@@ -317,7 +516,8 @@ export default function ReportesPage() {
             )
           }
           aria-pressed={
-            tipo === "perdido"
+            tipo ===
+            "perdido"
           }
         >
           <div className="reporte-stat-icon-wrap">
@@ -404,7 +604,8 @@ export default function ReportesPage() {
 
           <strong>
             {
-              estadisticas.avistamientos
+              estadisticas
+                .avistamientos
             }
           </strong>
 
@@ -417,8 +618,7 @@ export default function ReportesPage() {
           </span>
         </button>
       </section>
-
-      {/* ======================================
+            {/* ======================================
           FILTROS
       ====================================== */}
 
@@ -427,9 +627,7 @@ export default function ReportesPage() {
           tipo={tipo}
           especie={especie}
           q={q}
-          onTipoChange={(
-            value
-          ) =>
+          onTipoChange={(value) =>
             setTipo(
               value as TipoFiltro
             )
@@ -570,134 +768,279 @@ export default function ReportesPage() {
                 (reporte) => {
                   const fotoReporte =
                     reporte.foto ||
-                    reporte.mascota?.foto ||
+                    reporte.mascota
+                      ?.foto ||
                     null;
 
+                  const recompensa =
+                    formatearRecompensa(
+                      reporte.rewardAmount
+                    );
+
+                  const esPerdidoActivo =
+                    reporte.tipo ===
+                      "perdido" &&
+                    reporte.estado ===
+                      "active";
+
+                  const estaActualizando =
+                    actualizandoId ===
+                    reporte.id;
+
                   return (
-                  <article
-                    className="reporte-card"
-                    key={
-                      reporte.id
-                    }
-                  >
-                    {/* FOTO */}
+                    <article
+                      className="reporte-card"
+                      key={
+                        reporte.id
+                      }
+                    >
+                      {/* FOTO */}
 
-                    <div className="reporte-foto">
-                      {fotoReporte ? (
-                        <Image
-                          src={fotoReporte}
-                          alt={
-                            reporte
-                              .mascota
-                              ?.nombre ??
-                            "Mascota"
-                          }
-                          width={
-                            420
-                          }
-                          height={
-                            260
-                          }
-                          className="reporte-img"
-                          unoptimized
-                        />
-                      ) : (
-                        <div className="reporte-foto-placeholder">
-                          🐾
-                        </div>
-                      )}
-                    </div>
-
-                    {/* INFORMACIÓN */}
-
-                    <div className="reporte-info">
-                      <div className="reporte-card-top">
-                        <span
-                          className={
-                            claseTipo[
-                              reporte
-                                .tipo
-                            ]
-                          }
-                        >
-                          {
-                            etiquetaTipo[
-                              reporte
-                                .tipo
-                            ]
-                          }
-                        </span>
-                      </div>
-
-                      <h3>
-                        {reporte
-                          .mascota
-                          ?.nombre ??
-                          "Mascota"}
-                      </h3>
-
-                      <p className="reporte-meta">
-                        {
-                          reporte
-                            .mascota
-                            ?.especie
-                        }
-
-                        {reporte
-                          .mascota
-                          ?.raza
-                          ? ` · ${reporte.mascota.raza}`
-                          : ""}
-
-                        {reporte
-                          .mascota
-                          ?.color
-                          ? ` · ${reporte.mascota.color}`
-                          : ""}
-                      </p>
-
-                      {reporte.ubicacion && (
-                        <p className="reporte-ubicacion">
-                          <span>
-                            📍
-                          </span>
-
-                          {
-                            reporte.ubicacion
-                          }
-                        </p>
-                      )}
-
-                      <p className="reporte-descripcion">
-                        {
-                          reporte.descripcion ||
-                          "Sin descripción disponible."
-                        }
-                      </p>
-
-                      <div className="reporte-card-footer">
-                        {reporte
-                          .mascota
-                          ?.contactoTelefono ? (
-                          <a
-                            className="reporte-contacto"
-                            href={`tel:${reporte.mascota.contactoTelefono}`}
-                          >
-                            ☎{" "}
-                            {
+                      <div className="reporte-foto">
+                        {fotoReporte ? (
+                          <Image
+                            src={
+                              fotoReporte
+                            }
+                            alt={
                               reporte
                                 .mascota
-                                .contactoTelefono
+                                ?.nombre ??
+                              "Mascota"
                             }
-                          </a>
+                            width={
+                              420
+                            }
+                            height={
+                              260
+                            }
+                            className="reporte-img"
+                            unoptimized
+                          />
                         ) : (
-                          <span className="reporte-sin-contacto">
-                            Sin teléfono informado
-                          </span>
+                          <div className="reporte-foto-placeholder">
+                            🐾
+                          </div>
                         )}
                       </div>
-                    </div>
-                  </article>
+
+                      {/* INFORMACIÓN */}
+
+                      <div className="reporte-info">
+                        <div className="reporte-card-top">
+                          <span
+                            className={
+                              claseTipo[
+                                reporte
+                                  .tipo
+                              ]
+                            }
+                          >
+                            {
+                              etiquetaTipo[
+                                reporte
+                                  .tipo
+                              ]
+                            }
+                          </span>
+
+                          {reporte.estado ===
+                            "resolved" &&
+                            reporte.tipo ===
+                              "perdido" && (
+                              <span className="badge-tipo encontrado">
+                                Ya apareció
+                              </span>
+                            )}
+                        </div>
+
+                        <h3>
+                          {reporte
+                            .mascota
+                            ?.nombre ??
+                            "Mascota"}
+                        </h3>
+
+                        <p className="reporte-meta">
+                          {
+                            reporte
+                              .mascota
+                              ?.especie
+                          }
+
+                          {reporte
+                            .mascota
+                            ?.raza
+                            ? ` · ${reporte.mascota.raza}`
+                            : ""}
+
+                          {reporte
+                            .mascota
+                            ?.color
+                            ? ` · ${reporte.mascota.color}`
+                            : ""}
+                        </p>
+
+                        {reporte.ubicacion && (
+                          <p className="reporte-ubicacion">
+                            <span>
+                              📍
+                            </span>
+
+                            {
+                              reporte.ubicacion
+                            }
+                          </p>
+                        )}
+
+                        {/* RECOMPENSA */}
+
+                        {reporte.tipo ===
+                          "perdido" &&
+                          recompensa && (
+                            <div
+                              className="reporte-recompensa"
+                              style={{
+                                display:
+                                  "flex",
+                                alignItems:
+                                  "center",
+                                gap: "10px",
+                                marginTop:
+                                  "10px",
+                                marginBottom:
+                                  "10px",
+                                padding:
+                                  "10px 12px",
+                                borderRadius:
+                                  "12px",
+                                background:
+                                  "#fff8e7",
+                                border:
+                                  "1px solid #f2d48a",
+                              }}
+                            >
+                              <span
+                                aria-hidden="true"
+                                style={{
+                                  fontSize:
+                                    "20px",
+                                }}
+                              >
+                                💰
+                              </span>
+
+                              <div>
+                                <small
+                                  style={{
+                                    display:
+                                      "block",
+                                    color:
+                                      "#8a6d1d",
+                                    fontWeight:
+                                      600,
+                                  }}
+                                >
+                                  Recompensa ofrecida
+                                </small>
+
+                                <strong
+                                  style={{
+                                    display:
+                                      "block",
+                                    marginTop:
+                                      "2px",
+                                  }}
+                                >
+                                  {
+                                    recompensa
+                                  }
+                                </strong>
+                              </div>
+                            </div>
+                          )}
+
+                        <p className="reporte-descripcion">
+                          {
+                            reporte.descripcion ||
+                            "Sin descripción disponible."
+                          }
+                        </p>
+
+                        <div className="reporte-card-footer">
+                          {reporte
+                            .mascota
+                            ?.contactoTelefono ? (
+                            <a
+                              className="reporte-contacto"
+                              href={`tel:${reporte.mascota.contactoTelefono}`}
+                            >
+                              ☎{" "}
+                              {
+                                reporte
+                                  .mascota
+                                  .contactoTelefono
+                              }
+                            </a>
+                          ) : (
+                            <span className="reporte-sin-contacto">
+                              Sin teléfono informado
+                            </span>
+                          )}
+                        </div>
+
+                        {/* YA APARECIÓ */}
+
+                        {esPerdidoActivo && (
+                          <div
+                            style={{
+                              marginTop:
+                                "14px",
+                            }}
+                          >
+                            <button
+                              type="button"
+                              onClick={() =>
+                                marcarComoEncontrada(
+                                  reporte
+                                )
+                              }
+                              disabled={
+                                estaActualizando
+                              }
+                              style={{
+                                width:
+                                  "100%",
+                                border:
+                                  "none",
+                                borderRadius:
+                                  "12px",
+                                padding:
+                                  "11px 14px",
+                                fontWeight:
+                                  700,
+                                cursor:
+                                  estaActualizando
+                                    ? "not-allowed"
+                                    : "pointer",
+                                opacity:
+                                  estaActualizando
+                                    ? 0.65
+                                    : 1,
+                                background:
+                                  "#e8f7ee",
+                                color:
+                                  "#16794a",
+                              }}
+                            >
+                              {estaActualizando
+                                ? "Actualizando..."
+                                : "🐾 ¡Ya apareció!"}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </article>
                   );
                 }
               )}

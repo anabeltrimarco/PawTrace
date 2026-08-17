@@ -285,7 +285,6 @@ export interface FoundReport {
   photos?: FoundReportPhoto[];
 }
 
-
 // ==========================================
 // SIGHTINGS / AVISTAMIENTOS
 // ==========================================
@@ -422,6 +421,13 @@ export interface Reporte {
   fecha: string;
 
   estado: string;
+
+  // Recompensa solo para mascotas perdidas.
+  // En encontrados y avistamientos será null.
+  rewardAmount:
+    | string
+    | number
+    | null;
 
   mascotaId:
     | string
@@ -595,10 +601,12 @@ export interface PetFilters {
 // ==========================================
 // API ERROR
 // ==========================================
+// ==========================================
+// API ERROR
+// ==========================================
 
 export class ApiError extends Error {
   status?: number;
-
   data?: unknown;
 
   constructor(
@@ -609,10 +617,13 @@ export class ApiError extends Error {
     super(message);
 
     this.name = "ApiError";
-
     this.status = status;
-
     this.data = data;
+
+    Object.setPrototypeOf(
+      this,
+      ApiError.prototype
+    );
   }
 }
 
@@ -790,6 +801,7 @@ export function getAuthHeaders():
       `Bearer ${token}`,
   };
 }
+
 // ==========================================
 // PETS
 // ==========================================
@@ -913,8 +925,6 @@ export async function eliminarPet(
     response
   );
 }
-
-
 
 // ==========================================
 // FOTOS / CLOUDINARY
@@ -1171,10 +1181,10 @@ export async function eliminarLostReport(
     response
   );
 }
+
 // ==========================================
 // FOUND REPORTS
 // ==========================================
-
 export interface FoundReportFilters {
   status?: string;
 
@@ -1356,7 +1366,6 @@ export async function eliminarFoundReport(
     response
   );
 }
-
 
 // ==========================================
 // SIGHTINGS / AVISTAMIENTOS
@@ -1544,6 +1553,14 @@ function lostReportToReporte(
     estado:
       report.status,
 
+    // ======================================
+    // RECOMPENSA
+    // ======================================
+
+    rewardAmount:
+      report.rewardAmount ??
+      null,
+
     mascotaId:
       report.petId || null,
 
@@ -1584,10 +1601,10 @@ function lostReportToReporte(
 
       foto:
         report.pet?.photos?.find(
-                (photo) => photo.isMain
-              )?.imageUrl ||
-              report.pet?.photos?.[0]?.imageUrl ||
-              null,
+          (photo) => photo.isMain
+        )?.imageUrl ||
+        report.pet?.photos?.[0]?.imageUrl ||
+        null,
 
       contactoNombre:
         report.contactName ||
@@ -1657,6 +1674,9 @@ function foundReportToReporte(
     estado:
       report.status,
 
+    // Encontrados no tienen recompensa.
+    rewardAmount: null,
+
     mascotaId: null,
 
     usuarioId:
@@ -1714,7 +1734,6 @@ function foundReportToReporte(
   };
 }
 
-
 // ==========================================
 // CONVERTIR SIGHTING A REPORTE
 // ==========================================
@@ -1761,6 +1780,9 @@ function sightingToReporte(
 
     estado:
       report.status,
+
+    // Avistamientos no tienen recompensa.
+    rewardAmount: null,
 
     mascotaId: null,
 
@@ -1863,7 +1885,10 @@ export async function listarReportes(
       listarLostReports({
         species:
           speciesBackend,
-        q: filtros.q,
+
+        q:
+          filtros.q,
+
         status:
           filtros.estado,
       }).then((reports) =>
@@ -1879,7 +1904,10 @@ export async function listarReportes(
       listarFoundReports({
         species:
           speciesBackend,
-        q: filtros.q,
+
+        q:
+          filtros.q,
+
         status:
           filtros.estado,
       }).then((reports) =>
@@ -1895,7 +1923,10 @@ export async function listarReportes(
       listarSightings({
         species:
           speciesBackend,
-        q: filtros.q,
+
+        q:
+          filtros.q,
+
         status:
           filtros.estado,
       }).then((reports) =>
@@ -1905,8 +1936,7 @@ export async function listarReportes(
       )
     );
   }
-
-  const results =
+    const results =
     await Promise.all(
       requests
     );
@@ -1981,6 +2011,7 @@ export async function listarReportes(
 
   return reportes;
 }
+
 // ==========================================
 // COMPATIBILIDAD: MASCOTAS
 // ==========================================
