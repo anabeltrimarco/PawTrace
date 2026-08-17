@@ -474,6 +474,34 @@ export default function ReportLost() {
           ) || ""
         ).trim();
 
+      const recompensa =
+        String(
+          formData.get(
+            "recompensa"
+          ) || ""
+        ).trim();
+
+      const rewardAmount =
+        recompensa
+          ? Number(recompensa)
+          : null;
+
+      if (
+        rewardAmount !== null &&
+        (
+          !Number.isFinite(
+            rewardAmount
+          ) ||
+          rewardAmount < 0
+        )
+      ) {
+        setError(
+          "La recompensa debe ser un importe válido."
+        );
+
+        return;
+      }
+
       const descripcion =
         String(
           formData.get(
@@ -757,6 +785,8 @@ export default function ReportLost() {
 
                     contactPhone:
                       telefono,
+
+                    rewardAmount,
 
                     publicNotes:
                       descripcion,
@@ -1210,6 +1240,59 @@ export default function ReportLost() {
             placeholder="Ej: 11 3248 3391"
             required
           />
+        </div>
+
+        {/* ==================================
+            RECOMPENSA
+        ================================== */}
+
+        <div className="form-group">
+          <label htmlFor="recompensa">
+            Recompensa ofrecida
+          </label>
+
+          <div
+            style={{
+              position: "relative",
+            }}
+          >
+            <span
+              style={{
+                position: "absolute",
+                left: "14px",
+                top: "50%",
+                transform:
+                  "translateY(-50%)",
+                color: "#64748b",
+                fontWeight: 700,
+                pointerEvents: "none",
+              }}
+            >
+              $
+            </span>
+
+            <input
+              id="recompensa"
+              type="number"
+              name="recompensa"
+              min="0"
+              step="1"
+              placeholder="Ej: 50000"
+              style={{
+                paddingLeft: "32px",
+              }}
+            />
+          </div>
+
+          <small
+            style={{
+              display: "block",
+              marginTop: "6px",
+              color: "#64748b",
+            }}
+          >
+            Opcional. Dejalo vacío si no ofrecés recompensa.
+          </small>
         </div>
 
         {/* ==================================
