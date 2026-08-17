@@ -1,60 +1,162 @@
-const { verificarToken } = require('../utils/jwt');
-const { User } = require('../models');
+const {
+  verificarToken,
+} = require("../utils/jwt");
 
-// Verifica que la petición traiga un JWT válido en el header Authorization: Bearer <token>
-async function autenticar(req, res, next) {
+const {
+  User,
+} = require("../models");
+
+// ==========================================
+// AUTENTICACIÓN OBLIGATORIA
+// ==========================================
+// Verifica:
+// Authorization: Bearer <token>
+// ==========================================
+
+async function autenticar(
+  req,
+  res,
+  next
+) {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Token no proporcionado.' });
+    const authHeader =
+      req.headers.authorization;
+
+    if (
+      !authHeader ||
+      !authHeader.startsWith(
+        "Bearer "
+      )
+    ) {
+      return res
+        .status(401)
+        .json({
+          error:
+            "Token no proporcionado.",
+        });
     }
 
-    const token = authHeader.split(' ')[1];
-    const payload = verificarToken(token);
+    const token =
+      authHeader.split(" ")[1];
 
-    const usuario = await User.findByPk(payload.id);
-    if (!usuario || !usuario.activo) {
-      return res.status(401).json({ error: 'Usuario no válido o inactivo.' });
+    const payload =
+      verificarToken(token);
+
+    const usuario =
+      await User.findByPk(
+        payload.id
+      );
+
+    if (
+      !usuario ||
+      !usuario.isActive
+    ) {
+      return res
+        .status(401)
+        .json({
+          error:
+            "Usuario no válido o inactivo.",
+        });
     }
 
-    req.usuario = usuario;
+    req.usuario =
+      usuario;
+
     next();
   } catch (error) {
-    return res.status(401).json({ error: 'Token inválido o expirado.' });
+    return res
+      .status(401)
+      .json({
+        error:
+          "Token inválido o expirado.",
+      });
   }
 }
 
-// Igual que autenticar, pero no bloquea si no hay token: para endpoints públicos
-// que se comportan distinto si el usuario está logueado (ej: crear reportes sin cuenta).
-async function autenticarOpcional(req, res, next) {
+// ==========================================
+// AUTENTICACIÓN OPCIONAL
+// ==========================================
+
+async function autenticarOpcional(
+  req,
+  res,
+  next
+) {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    const authHeader =
+      req.headers.authorization;
+
+    if (
+      !authHeader ||
+      !authHeader.startsWith(
+        "Bearer "
+      )
+    ) {
       return next();
     }
 
-    const token = authHeader.split(' ')[1];
-    const payload = verificarToken(token);
-    const usuario = await User.findByPk(payload.id);
+    const token =
+      authHeader.split(" ")[1];
 
-    if (usuario && usuario.activo) {
-      req.usuario = usuario;
+    const payload =
+      verificarToken(token);
+
+    const usuario =
+      await User.findByPk(
+        payload.id
+      );
+
+    if (
+      usuario &&
+      usuario.isActive
+    ) {
+      req.usuario =
+        usuario;
     }
+
     next();
   } catch (error) {
-    // Token inválido en un endpoint opcional: seguimos como anónimo.
+    // En endpoints opcionales,
+    // un token inválido simplemente
+    // continúa como usuario anónimo.
     next();
   }
 }
 
-// Restringe el acceso solo a ciertos roles, ej: autorizar('admin')
-function autorizar(...rolesPermitidos) {
-  return (req, res, next) => {
-    if (!req.usuario || !rolesPermitidos.includes(req.usuario.rol)) {
-      return res.status(403).json({ error: 'No tenés permisos para esta acción.' });
+// ==========================================
+// AUTORIZACIÓN POR ROLES
+// Ejemplo:
+// autorizar("admin")
+// ==========================================
+
+function autorizar(
+  ...rolesPermitidos
+) {
+  return (
+    req,
+    res,
+    next
+  ) => {
+    if (
+      !req.usuario ||
+      !rolesPermitidos.includes(
+        req.usuario.role
+      )
+    ) {
+      return res
+        .status(403)
+        .json({
+          error:
+            "No tenés permisos para esta acción.",
+        });
     }
+
     next();
   };
 }
 
-module.exports = { autenticar, autenticarOpcional, autorizar };
+module.exports = {
+  autenticar,
+  autenticarOpcional,
+  autorizar,
+};

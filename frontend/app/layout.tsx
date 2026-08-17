@@ -1,5 +1,6 @@
 import "./globals.css";
 import Image from "next/image";
+import AuthStatus from "../components/AuthStatus";
 
 export const metadata = {
   title: "PawTrace AI",
@@ -14,6 +15,10 @@ export default function RootLayout({
     <html lang="es">
       <body>
         <div className="app-wrapper">
+
+          {/* Estado de sesión */}
+          <AuthStatus />
+
           <div className="app-content">
             {children}
           </div>
@@ -29,6 +34,7 @@ export default function RootLayout({
               />
             </div>
           </footer>
+
         </div>
       </body>
     </html>

@@ -2178,7 +2178,7 @@ export interface LoginInput {
 }
 
 export interface RegisterInput {
-  fullName: string;
+  nombre: string;
   email: string;
   password: string;
   phone?: string | null;
@@ -2235,7 +2235,7 @@ export async function register(
 ): Promise<AuthResponse> {
   const response =
     await fetch(
-      `${API_URL}/auth/register`,
+      `${API_URL}/auth/registro`,
       {
         method: "POST",
 

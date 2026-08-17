@@ -341,10 +341,8 @@ function puedeModificar(
   }
 
   return (
-    report.userId !==
-      null &&
-    report.userId ===
-      req.usuario.id
+     report.userId !== null &&
+    String(report.userId) === String(req.usuario.id)
   );
 }
 
