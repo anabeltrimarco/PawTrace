@@ -6,8 +6,11 @@ import dynamic from "next/dynamic";
 import {
   ChangeEvent,
   FormEvent,
+  useEffect,
   useState,
 } from "react";
+
+import { useRouter } from "next/navigation";
 
 // ==========================================
 // LOCATION PICKER
@@ -178,6 +181,30 @@ function getBreedsBySpecies(
 // ==========================================
 
 export default function ReportLost() {
+  const router = useRouter();
+
+  const [authChecked, setAuthChecked] =
+    useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const token =
+      localStorage.getItem("token");
+
+    if (!token) {
+      router.replace(
+        "/login?next=/report-lost"
+      );
+
+      return;
+    }
+
+    setAuthChecked(true);
+  }, [router]);
+
   // ========================================
   // ESPECIE / RAZA
   // ========================================
@@ -409,6 +436,17 @@ export default function ReportLost() {
       event: FormEvent<HTMLFormElement>
     ) => {
       event.preventDefault();
+
+      const token =
+        localStorage.getItem("token");
+
+      if (!token) {
+        router.push(
+          "/login?next=/report-lost"
+        );
+
+        return;
+      }
 
       setError("");
 
@@ -892,6 +930,29 @@ export default function ReportLost() {
   // ==========================================
   // UI
   // ==========================================
+
+  if (!authChecked) {
+    return (
+      <main
+        className="container form-page"
+        style={{
+          minHeight: "60vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <div
+          style={{
+            textAlign: "center",
+            color: "#64748b",
+          }}
+        >
+          Verificando sesión...
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="container form-page">
