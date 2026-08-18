@@ -1376,6 +1376,13 @@ export default function MapView() {
                   ? foundIcon
                   : sightingIcon
               }
+              zIndexOffset={
+                marker.type === "lost"
+                  ? 3000
+                  : marker.type === "found"
+                  ? 2000
+                  : 1000
+              }
             >
               <Popup>
                 <div

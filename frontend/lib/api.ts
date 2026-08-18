@@ -1081,6 +1081,34 @@ export async function listarLostReports(
   );
 }
 
+// ==========================================
+// MIS REPORTES DEL USUARIO AUTENTICADO
+// GET /api/lost-reports/mine
+// ==========================================
+
+export async function listarMisLostReports(
+  status?: ReportStatus
+): Promise<LostReport[]> {
+  const query = buildQuery({
+    status,
+  });
+
+  const response = await fetch(
+    `${API_URL}/lost-reports/mine${query}`,
+    {
+      cache: "no-store",
+
+      headers: {
+        ...getAuthHeaders(),
+      },
+    }
+  );
+
+  return handleResponse<LostReport[]>(
+    response
+  );
+}
+
 export async function obtenerLostReport(
   id: string
 ): Promise<LostReport> {

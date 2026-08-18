@@ -1,14 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 type Usuario = {
-  id?: string;
-  fullName?: string;
-  email?: string;
-  role?: string;
+  id: string;
+  fullName?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  role?: string | null;
+  avatarUrl?: string | null;
+};
+
+type PerfilResponse = {
+  usuario: Usuario;
 };
 
 const API_URL =
@@ -16,7 +22,7 @@ const API_URL =
   "http://localhost:5000/api";
 
 export default function AuthStatus() {
-  const pathname = usePathname();
+  const router = useRouter();
 
   const [usuario, setUsuario] =
     useState<Usuario | null>(null);
@@ -24,46 +30,45 @@ export default function AuthStatus() {
   const [cargando, setCargando] =
     useState(true);
 
+  // ==========================================
+  // CARGAR USUARIO LOGUEADO
+  // ==========================================
+
   useEffect(() => {
     let activo = true;
 
     async function cargarUsuario() {
       try {
-        setCargando(true);
-
         const token =
           localStorage.getItem("token");
 
         if (!token) {
           if (activo) {
             setUsuario(null);
+            setCargando(false);
           }
 
           return;
         }
 
-        const response =
-          await fetch(
-            `${API_URL}/auth/perfil`,
-            {
-              cache: "no-store",
+        const response = await fetch(
+          `${API_URL}/auth/perfil`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
 
-              headers: {
-                Authorization:
-                  `Bearer ${token}`,
-              },
-            }
-          );
+            cache: "no-store",
+          }
+        );
 
         if (!response.ok) {
-          console.error(
-            "Perfil rechazado:",
-            response.status
-          );
-
-          localStorage.removeItem(
-            "token"
-          );
+          if (
+            response.status === 401 ||
+            response.status === 403
+          ) {
+            localStorage.removeItem("token");
+          }
 
           if (activo) {
             setUsuario(null);
@@ -72,17 +77,15 @@ export default function AuthStatus() {
           return;
         }
 
-        const data =
+        const data: PerfilResponse =
           await response.json();
 
         if (activo) {
-          setUsuario(
-            data.usuario || null
-          );
+          setUsuario(data.usuario);
         }
       } catch (error) {
         console.error(
-          "Error obteniendo usuario:",
+          "Error cargando usuario:",
           error
         );
 
@@ -101,141 +104,175 @@ export default function AuthStatus() {
     return () => {
       activo = false;
     };
-  }, [pathname]);
+  }, []);
+
+  // ==========================================
+  // CERRAR SESIÓN
+  // ==========================================
 
   function cerrarSesion() {
-    localStorage.removeItem(
-      "token"
-    );
-
-    localStorage.removeItem(
-      "usuario"
-    );
-
-    localStorage.removeItem(
-      "user"
-    );
+    localStorage.removeItem("token");
 
     setUsuario(null);
 
-    window.location.href = "/";
+    router.push("/");
+
+    router.refresh();
   }
 
+  // ==========================================
+  // CARGANDO
+  // ==========================================
+
   if (cargando) {
+    return null;
+  }
+
+  // ==========================================
+  // USUARIO NO LOGUEADO
+  // ==========================================
+
+  if (!usuario) {
     return (
       <div
         style={{
-          padding: "9px 18px",
-          textAlign: "right",
-          color: "#64748b",
-          fontSize: "13px",
-          background: "#ffffff",
-          borderBottom:
-            "1px solid #e7eeeb",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "flex-end",
+          gap: "10px",
+          flexWrap: "wrap",
         }}
       >
-        Verificando sesión...
+        <Link
+          href="/login"
+          style={{
+            color: "#334155",
+            textDecoration: "none",
+            fontWeight: 700,
+            padding: "8px 12px",
+          }}
+        >
+          Iniciar sesión
+        </Link>
+
+        <Link
+          href="/register"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "8px 14px",
+            borderRadius: "9px",
+            background: "#147d64",
+            color: "#ffffff",
+            textDecoration: "none",
+            fontWeight: 700,
+          }}
+        >
+          Crear cuenta
+        </Link>
       </div>
     );
   }
+
+  // ==========================================
+  // USUARIO LOGUEADO
+  // ==========================================
 
   return (
     <div
       style={{
         display: "flex",
         alignItems: "center",
-        justifyContent:
-          "flex-end",
+        justifyContent: "flex-end",
+        gap: "14px",
         flexWrap: "wrap",
-        gap: "12px",
-        padding: "9px 18px",
-        background: "#ffffff",
-        borderBottom:
-          "1px solid #e7eeeb",
-        fontSize: "14px",
       }}
     >
-      {usuario ? (
-        <>
-          <span
+      {/* USUARIO */}
+
+      <span
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "6px",
+          color: "#334155",
+          fontWeight: 700,
+        }}
+      >
+        {usuario.avatarUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={usuario.avatarUrl}
+            alt=""
             style={{
-              color: "#334155",
+              width: "28px",
+              height: "28px",
+              borderRadius: "50%",
+              objectFit: "cover",
             }}
-          >
-            👤{" "}
-            <strong>
-              {usuario.fullName ||
-                usuario.email ||
-                "Usuario"}
-            </strong>
+          />
+        ) : (
+          <span aria-hidden="true">
+            👤
           </span>
+        )}
 
-          <button
-            type="button"
-            onClick={
-              cerrarSesion
-            }
-            style={{
-              border:
-                "1px solid #d6e1dd",
-              background:
-                "#ffffff",
-              color:
-                "#475569",
-              borderRadius:
-                "8px",
-              padding:
-                "6px 11px",
-              fontSize:
-                "13px",
-              fontWeight:
-                600,
-              cursor:
-                "pointer",
-            }}
-          >
-            Cerrar sesión
-          </button>
-        </>
-      ) : (
-        <>
-          <span
-            style={{
-              color: "#64748b",
-            }}
-          >
-            No has iniciado sesión
-          </span>
+        <span>
+          {usuario.fullName ||
+            usuario.email ||
+            "Usuario"}
+        </span>
+      </span>
 
-          <Link
-            href="/login"
-            style={{
-              color:
-                "#147d64",
-              fontWeight:
-                700,
-              textDecoration:
-                "none",
-            }}
-          >
-            Iniciar sesión
-          </Link>
+      {/* MI PERFIL */}
 
-          <Link
-            href="/register"
-            style={{
-              color:
-                "#147d64",
-              fontWeight:
-                700,
-              textDecoration:
-                "none",
-            }}
-          >
-            Registrarse
-          </Link>
-        </>
-      )}
+      <Link
+        href="/perfil"
+        style={{
+          color: "#147d64",
+          fontWeight: 700,
+          textDecoration: "none",
+          padding: "6px 2px",
+          whiteSpace: "nowrap",
+        }}
+      >
+        Mi perfil
+      </Link>
+
+      {/* MIS REPORTES */}
+
+      <Link
+        href="/mis-reportes"
+        style={{
+          color: "#147d64",
+          fontWeight: 700,
+          textDecoration: "none",
+          padding: "6px 2px",
+          whiteSpace: "nowrap",
+        }}
+      >
+        🐾 Mis reportes
+      </Link>
+
+      {/* CERRAR SESIÓN */}
+
+      <button
+        type="button"
+        onClick={cerrarSesion}
+        style={{
+          padding: "8px 14px",
+          borderRadius: "9px",
+          border: "1px solid #d5dfdc",
+          background: "#ffffff",
+          color: "#334155",
+          fontWeight: 700,
+          cursor: "pointer",
+          whiteSpace: "nowrap",
+        }}
+      >
+        Cerrar sesión
+      </button>
     </div>
   );
 }

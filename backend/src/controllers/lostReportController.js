@@ -1,4 +1,6 @@
-const { validationResult } = require("express-validator");
+const {
+  validationResult,
+} = require("express-validator");
 
 const {
   LostReport,
@@ -17,6 +19,7 @@ const reportIncludes = [
   {
     model: Pet,
     as: "pet",
+
     include: [
       {
         model: PetPhoto,
@@ -25,9 +28,11 @@ const reportIncludes = [
       },
     ],
   },
+
   {
     model: User,
     as: "user",
+
     attributes: [
       "id",
       "fullName",
@@ -35,8 +40,10 @@ const reportIncludes = [
       "phone",
       "avatarUrl",
     ],
+
     required: false,
   },
+
   {
     model: Location,
     as: "location",
@@ -46,31 +53,101 @@ const reportIncludes = [
 
 // ======================================================
 // GET /api/lost-reports
+// PÚBLICO
 // ======================================================
 
-async function listar(req, res, next) {
+async function listar(
+  req,
+  res,
+  next
+) {
   try {
     const where = {};
 
     if (req.query.status) {
-      where.status = req.query.status;
+      where.status =
+        req.query.status;
     }
 
     if (req.query.petId) {
-      where.petId = req.query.petId;
+      where.petId =
+        req.query.petId;
     }
 
-    const reports = await LostReport.findAll({
-      where,
+    const reports =
+      await LostReport.findAll({
+        where,
 
-      include: reportIncludes,
+        include:
+          reportIncludes,
 
-      order: [
-        ["created_at", "DESC"],
-      ],
-    });
+        order: [
+          [
+            "created_at",
+            "DESC",
+          ],
+        ],
+      });
 
-    return res.json(reports);
+    return res.json(
+      reports
+    );
+  } catch (error) {
+    next(error);
+  }
+}
+
+// ======================================================
+// GET /api/lost-reports/mine
+// SOLO REPORTES DEL USUARIO LOGUEADO
+// ======================================================
+
+async function listarMios(
+  req,
+  res,
+  next
+) {
+  try {
+    if (!req.usuario) {
+      return res
+        .status(401)
+        .json({
+          error:
+            "Debés iniciar sesión para ver tus reportes.",
+        });
+    }
+
+    const where = {
+      userId:
+        req.usuario.id,
+    };
+
+    // Permite filtrar:
+    // /mine?status=active
+    // /mine?status=resolved
+    if (req.query.status) {
+      where.status =
+        req.query.status;
+    }
+
+    const reports =
+      await LostReport.findAll({
+        where,
+
+        include:
+          reportIncludes,
+
+        order: [
+          [
+            "created_at",
+            "DESC",
+          ],
+        ],
+      });
+
+    return res.json(
+      reports
+    );
   } catch (error) {
     next(error);
   }
@@ -78,15 +155,21 @@ async function listar(req, res, next) {
 
 // ======================================================
 // GET /api/lost-reports/:id
+// PÚBLICO
 // ======================================================
 
-async function obtener(req, res, next) {
+async function obtener(
+  req,
+  res,
+  next
+) {
   try {
     const report =
       await LostReport.findByPk(
         req.params.id,
         {
-          include: reportIncludes,
+          include:
+            reportIncludes,
         }
       );
 
@@ -99,7 +182,9 @@ async function obtener(req, res, next) {
         });
     }
 
-    return res.json(report);
+    return res.json(
+      report
+    );
   } catch (error) {
     next(error);
   }
@@ -107,9 +192,14 @@ async function obtener(req, res, next) {
 
 // ======================================================
 // POST /api/lost-reports
+// USUARIO LOGUEADO OBLIGATORIO
 // ======================================================
 
-async function crear(req, res, next) {
+async function crear(
+  req,
+  res,
+  next
+) {
   const transaction =
     await sequelize.transaction();
 
@@ -127,6 +217,17 @@ async function crear(req, res, next) {
         .json({
           errores:
             errors.array(),
+        });
+    }
+
+    if (!req.usuario) {
+      await transaction.rollback();
+
+      return res
+        .status(401)
+        .json({
+          error:
+            "Debés iniciar sesión para publicar una mascota perdida.",
         });
     }
 
@@ -208,12 +309,14 @@ async function crear(req, res, next) {
           address,
 
           neighborhood:
-            neighborhood || null,
+            neighborhood ||
+            null,
 
           latitude:
             latitude !==
               undefined &&
-            latitude !== null &&
+            latitude !==
+              null &&
             latitude !== ""
               ? latitude
               : null,
@@ -221,7 +324,8 @@ async function crear(req, res, next) {
           longitude:
             longitude !==
               undefined &&
-            longitude !== null &&
+            longitude !==
+              null &&
             longitude !== ""
               ? longitude
               : null,
@@ -242,33 +346,43 @@ async function crear(req, res, next) {
             pet.id,
 
           userId:
-            req.usuario
-              ? req.usuario.id
-              : null,
+            req.usuario.id,
 
           locationId:
             location.id,
 
           lastSeenAt:
-            lastSeenAt || null,
+            lastSeenAt ||
+            null,
 
           contactName:
-            contactName || null,
+            contactName ||
+            null,
 
           contactPhone:
-            contactPhone || null,
+            contactPhone ||
+            null,
 
           contactEmail:
-            contactEmail || null,
+            contactEmail ||
+            null,
 
           rewardAmount:
-            rewardAmount || null,
+            rewardAmount !==
+              undefined &&
+            rewardAmount !==
+              null &&
+            rewardAmount !== ""
+              ? rewardAmount
+              : null,
 
           publicNotes:
-            publicNotes || null,
+            publicNotes ||
+            null,
 
           internalNotes:
-            internalNotes || null,
+            internalNotes ||
+            null,
 
           status:
             "active",
@@ -284,7 +398,6 @@ async function crear(req, res, next) {
 
     // ==================================================
     // DEVOLVER REPORTE COMPLETO
-    // INCLUYE PET + PHOTOS + USER + LOCATION
     // ==================================================
 
     const completeReport =
@@ -305,7 +418,9 @@ async function crear(req, res, next) {
     if (!committed) {
       try {
         await transaction.rollback();
-      } catch (rollbackError) {
+      } catch (
+        rollbackError
+      ) {
         console.error(
           "Error haciendo rollback:",
           rollbackError
@@ -329,6 +444,7 @@ function puedeModificar(
     return false;
   }
 
+  // ADMIN / MODERADOR
   if (
     req.usuario.role ===
       "admin" ||
@@ -340,9 +456,16 @@ function puedeModificar(
     return true;
   }
 
+  // PROPIETARIO DEL REPORTE
   return (
-     report.userId !== null &&
-    String(report.userId) === String(req.usuario.id)
+    report.userId !==
+      null &&
+    String(
+      report.userId
+    ) ===
+      String(
+        req.usuario.id
+      )
   );
 }
 
@@ -398,19 +521,20 @@ async function actualizar(
     campos.forEach(
       (campo) => {
         if (
-          req.body[campo] !==
+          req.body[
+            campo
+          ] !==
           undefined
         ) {
           report[campo] =
-            req.body[campo];
+            req.body[
+              campo
+            ];
         }
       }
     );
 
     await report.save();
-
-    // Devolvemos también las relaciones
-    // para mantener la respuesta consistente.
 
     const updatedReport =
       await LostReport.findByPk(
@@ -483,6 +607,7 @@ async function eliminar(
 
 module.exports = {
   listar,
+  listarMios,
   obtener,
   crear,
   actualizar,

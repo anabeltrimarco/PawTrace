@@ -1,35 +1,72 @@
-const express = require("express");
-const { body } = require("express-validator");
+const express =
+  require("express");
 
-const controller = require("../controllers/lostReportController");
+const {
+  body,
+} = require(
+  "express-validator"
+);
+
+const controller =
+  require(
+    "../controllers/lostReportController"
+  );
+
 const {
   autenticar,
-} = require("../middleware/auth");
+} = require(
+  "../middleware/auth"
+);
 
-const router = express.Router();
+const router =
+  express.Router();
 
-// ==========================================
-// CONSULTAS PÚBLICAS
-// ==========================================
+// ======================================================
+// GET /api/lost-reports
+// PÚBLICO
+// ======================================================
 
 router.get(
   "/",
   controller.listar
 );
 
+// ======================================================
+// GET /api/lost-reports/mine
+// PRIVADO
+//
+// IMPORTANTE:
+// Tiene que estar ANTES de /:id,
+// porque Express podría interpretar "mine"
+// como si fuera un ID.
+// ======================================================
+
+router.get(
+  "/mine",
+  autenticar,
+  controller.listarMios
+);
+
+// ======================================================
+// GET /api/lost-reports/:id
+// PÚBLICO
+// ======================================================
+
 router.get(
   "/:id",
   controller.obtener
 );
 
-// ==========================================
-// CREAR REPORTE
-// Usuario obligatorio
-// ==========================================
+// ======================================================
+// POST /api/lost-reports
+// PRIVADO
+// ======================================================
 
 router.post(
   "/",
+
   autenticar,
+
   [
     body("petId")
       .notEmpty()
@@ -44,13 +81,15 @@ router.post(
         "La ubicación es obligatoria."
       ),
   ],
+
   controller.crear
 );
 
-// ==========================================
-// ACTUALIZAR REPORTE
-// Solo propietario/admin/moderador
-// ==========================================
+// ======================================================
+// PUT /api/lost-reports/:id
+// PRIVADO
+// Propietario / Admin / Moderador
+// ======================================================
 
 router.put(
   "/:id",
@@ -58,10 +97,11 @@ router.put(
   controller.actualizar
 );
 
-// ==========================================
-// ELIMINAR REPORTE
-// Solo propietario/admin/moderador
-// ==========================================
+// ======================================================
+// DELETE /api/lost-reports/:id
+// PRIVADO
+// Propietario / Admin / Moderador
+// ======================================================
 
 router.delete(
   "/:id",
@@ -69,4 +109,5 @@ router.delete(
   controller.eliminar
 );
 
-module.exports = router;
+module.exports =
+  router;

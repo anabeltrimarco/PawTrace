@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-
 import {
   FormEvent,
   useEffect,
@@ -93,6 +92,10 @@ export default function LoginPage() {
   ) {
     event.preventDefault();
 
+    if (isSubmitting) {
+      return;
+    }
+
     setError("");
 
     const emailLimpio =
@@ -148,15 +151,24 @@ export default function LoginPage() {
     }
   }
 
+  // ==========================================
+  // UI
+  // ==========================================
+
   return (
     <main
       style={{
         minHeight: "100vh",
+
         display: "flex",
+
         alignItems: "center",
+
         justifyContent:
           "center",
+
         padding: "24px",
+
         background:
           "#f7faf9",
       }}
@@ -164,15 +176,21 @@ export default function LoginPage() {
       <section
         style={{
           width: "100%",
+
           maxWidth: "420px",
+
           background:
             "#ffffff",
+
           border:
             "1px solid #e2ebe7",
+
           borderRadius:
             "22px",
+
           padding:
             "30px 28px",
+
           boxShadow:
             "0 18px 50px rgba(15, 60, 45, 0.08)",
         }}
@@ -183,6 +201,7 @@ export default function LoginPage() {
           style={{
             textAlign:
               "center",
+
             marginBottom:
               "26px",
           }}
@@ -190,19 +209,27 @@ export default function LoginPage() {
           <div
             style={{
               width: "58px",
+
               height: "58px",
+
               margin:
                 "0 auto 12px",
+
               borderRadius:
                 "18px",
+
               display:
                 "flex",
+
               alignItems:
                 "center",
+
               justifyContent:
                 "center",
+
               background:
                 "#e9f8f1",
+
               fontSize:
                 "30px",
             }}
@@ -213,8 +240,10 @@ export default function LoginPage() {
           <h1
             style={{
               margin: 0,
+
               fontSize:
                 "27px",
+
               color:
                 "#163d34",
             }}
@@ -226,10 +255,13 @@ export default function LoginPage() {
             style={{
               margin:
                 "8px 0 0",
+
               color:
                 "#64748b",
+
               fontSize:
                 "14px",
+
               lineHeight:
                 1.5,
             }}
@@ -244,21 +276,29 @@ export default function LoginPage() {
 
         {error && (
           <div
+            role="alert"
             style={{
               marginBottom:
                 "18px",
+
               padding:
                 "12px 14px",
+
               borderRadius:
                 "11px",
+
               background:
                 "#fff5f5",
+
               border:
                 "1px solid #fecaca",
+
               color:
                 "#b91c1c",
+
               fontSize:
                 "14px",
+
               fontWeight:
                 600,
             }}
@@ -266,6 +306,8 @@ export default function LoginPage() {
             ⚠️ {error}
           </div>
         )}
+
+        {/* FORMULARIO */}
 
         <form
           onSubmit={
@@ -285,12 +327,16 @@ export default function LoginPage() {
               style={{
                 display:
                   "block",
+
                 marginBottom:
                   "7px",
+
                 fontSize:
                   "14px",
+
                 fontWeight:
                   700,
+
                 color:
                   "#334155",
               }}
@@ -303,6 +349,9 @@ export default function LoginPage() {
               type="email"
               autoComplete="email"
               value={email}
+              disabled={
+                isSubmitting
+              }
               onChange={(
                 event
               ) =>
@@ -314,19 +363,31 @@ export default function LoginPage() {
               placeholder="tu@email.com"
               required
               style={{
-                width: "100%",
+                width:
+                  "100%",
+
                 boxSizing:
                   "border-box",
+
                 padding:
                   "12px 14px",
+
                 border:
                   "1px solid #d6e1dd",
+
                 borderRadius:
                   "11px",
+
                 outline:
                   "none",
+
                 fontSize:
                   "15px",
+
+                background:
+                  isSubmitting
+                    ? "#f8faf9"
+                    : "#ffffff",
               }}
             />
           </div>
@@ -336,7 +397,7 @@ export default function LoginPage() {
           <div
             style={{
               marginBottom:
-                "20px",
+                "10px",
             }}
           >
             <label
@@ -344,12 +405,16 @@ export default function LoginPage() {
               style={{
                 display:
                   "block",
+
                 marginBottom:
                   "7px",
+
                 fontSize:
                   "14px",
+
                 fontWeight:
                   700,
+
                 color:
                   "#334155",
               }}
@@ -362,6 +427,9 @@ export default function LoginPage() {
               type="password"
               autoComplete="current-password"
               value={password}
+              disabled={
+                isSubmitting
+              }
               onChange={(
                 event
               ) =>
@@ -373,21 +441,64 @@ export default function LoginPage() {
               placeholder="Tu contraseña"
               required
               style={{
-                width: "100%",
+                width:
+                  "100%",
+
                 boxSizing:
                   "border-box",
+
                 padding:
                   "12px 14px",
+
                 border:
                   "1px solid #d6e1dd",
+
                 borderRadius:
                   "11px",
+
                 outline:
                   "none",
+
                 fontSize:
                   "15px",
+
+                background:
+                  isSubmitting
+                    ? "#f8faf9"
+                    : "#ffffff",
               }}
             />
+          </div>
+
+          {/* OLVIDÉ CONTRASEÑA */}
+
+          <div
+            style={{
+              textAlign:
+                "right",
+
+              marginBottom:
+                "18px",
+            }}
+          >
+            <Link
+              href="/forgot-password"
+              style={{
+                color:
+                  "#147d64",
+
+                fontSize:
+                  "13px",
+
+                fontWeight:
+                  700,
+
+                textDecoration:
+                  "none",
+              }}
+            >
+              ¿Olvidaste tu contraseña?
+            </Link>
           </div>
 
           {/* BOTÓN */}
@@ -398,25 +509,35 @@ export default function LoginPage() {
               isSubmitting
             }
             style={{
-              width: "100%",
+              width:
+                "100%",
+
               padding:
                 "12px 16px",
+
               border:
                 "none",
+
               borderRadius:
                 "11px",
+
               background:
                 "#147d64",
+
               color:
                 "#ffffff",
+
               fontSize:
                 "15px",
+
               fontWeight:
                 700,
+
               cursor:
                 isSubmitting
                   ? "not-allowed"
                   : "pointer",
+
               opacity:
                 isSubmitting
                   ? 0.7
@@ -435,14 +556,19 @@ export default function LoginPage() {
           style={{
             marginTop:
               "22px",
+
             paddingTop:
               "18px",
+
             borderTop:
               "1px solid #edf2f0",
+
             textAlign:
               "center",
+
             fontSize:
               "14px",
+
             color:
               "#64748b",
           }}
@@ -454,8 +580,10 @@ export default function LoginPage() {
             style={{
               color:
                 "#147d64",
+
               fontWeight:
                 700,
+
               textDecoration:
                 "none",
             }}
@@ -470,6 +598,7 @@ export default function LoginPage() {
           style={{
             marginTop:
               "16px",
+
             textAlign:
               "center",
           }}
@@ -479,8 +608,10 @@ export default function LoginPage() {
             style={{
               color:
                 "#64748b",
+
               fontSize:
                 "13px",
+
               textDecoration:
                 "none",
             }}
