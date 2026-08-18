@@ -57,7 +57,6 @@ export default function AuthStatus() {
             headers: {
               Authorization: `Bearer ${token}`,
             },
-
             cache: "no-store",
           }
         );
@@ -99,10 +98,95 @@ export default function AuthStatus() {
       }
     }
 
+    // Carga inicial
     cargarUsuario();
+
+    // ==========================================
+    // LOGIN / LOGOUT CAMBIÓ
+    // ==========================================
+
+    function handleAuthChanged() {
+      if (!activo) {
+        return;
+      }
+
+      setCargando(true);
+      cargarUsuario();
+    }
+
+    // ==========================================
+    // PERFIL CAMBIÓ
+    // ==========================================
+
+    function handlePerfilActualizado(
+      event: Event
+    ) {
+      if (!activo) {
+        return;
+      }
+
+      const customEvent =
+        event as CustomEvent<Usuario>;
+
+      if (customEvent.detail) {
+        setUsuario(
+          customEvent.detail
+        );
+
+        setCargando(false);
+
+        return;
+      }
+
+      cargarUsuario();
+    }
+
+    // Escuchamos cambios de sesión.
+    window.addEventListener(
+      "auth-changed",
+      handleAuthChanged
+    );
+
+    // Escuchamos cambios de perfil/avatar.
+    window.addEventListener(
+      "pawtrace:perfil-actualizado",
+      handlePerfilActualizado
+    );
+
+    // También reaccionamos si el token cambia
+    // desde otra pestaña del navegador.
+    function handleStorage(
+      event: StorageEvent
+    ) {
+      if (
+        event.key === "token"
+      ) {
+        handleAuthChanged();
+      }
+    }
+
+    window.addEventListener(
+      "storage",
+      handleStorage
+    );
 
     return () => {
       activo = false;
+
+      window.removeEventListener(
+        "auth-changed",
+        handleAuthChanged
+      );
+
+      window.removeEventListener(
+        "pawtrace:perfil-actualizado",
+        handlePerfilActualizado
+      );
+
+      window.removeEventListener(
+        "storage",
+        handleStorage
+      );
     };
   }, []);
 
@@ -111,9 +195,16 @@ export default function AuthStatus() {
   // ==========================================
 
   function cerrarSesion() {
-    localStorage.removeItem("token");
+    localStorage.removeItem(
+      "token"
+    );
 
     setUsuario(null);
+
+    // Avisamos al resto de la app.
+    window.dispatchEvent(
+      new Event("auth-changed")
+    );
 
     router.push("/");
 
@@ -210,6 +301,10 @@ export default function AuthStatus() {
               height: "28px",
               borderRadius: "50%",
               objectFit: "cover",
+            }}
+            onError={(event) => {
+              event.currentTarget.style.display =
+                "none";
             }}
           />
         ) : (

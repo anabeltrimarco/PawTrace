@@ -129,6 +129,10 @@ export default function LoginPage() {
             "No se pudo iniciar sesión."
         );
       }
+     
+      window.dispatchEvent(
+      new Event("auth-changed")
+      );
 
       router.replace(
         getNextPath()
