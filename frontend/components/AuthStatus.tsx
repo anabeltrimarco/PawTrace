@@ -17,11 +17,18 @@ type PerfilResponse = {
   usuario: Usuario;
 };
 
-const API_URL =
+const RAW_API_URL = (
   process.env.NEXT_PUBLIC_API_URL ||
-  "http://localhost:5000/api";
+  "http://localhost:5000/api"
+).replace(/\/$/, "");
 
-export default function AuthStatus() {
+const API_URL =
+  RAW_API_URL.endsWith("/api")
+    ? RAW_API_URL
+    : `${RAW_API_URL}/api`;
+
+  export default function AuthStatus() {
+  
   const router = useRouter();
 
   const [usuario, setUsuario] =
