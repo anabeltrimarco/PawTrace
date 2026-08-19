@@ -33,6 +33,8 @@ const reportIncludes = [
     model: User,
     as: "user",
 
+    // Nunca devolver datos sensibles
+    // como passwordHash.
     attributes: [
       "id",
       "fullName",
@@ -50,6 +52,81 @@ const reportIncludes = [
     required: false,
   },
 ];
+
+// ======================================================
+// HELPERS
+// ======================================================
+
+function esAdminOModerador(usuario) {
+  if (!usuario) {
+    return false;
+  }
+
+  const role =
+    String(usuario.role || "")
+      .toLowerCase();
+
+  return (
+    role === "admin" ||
+    role === "moderator"
+  );
+}
+
+function puedeModificar(
+  req,
+  report
+) {
+  if (!req.usuario) {
+    return false;
+  }
+
+  // Administradores y moderadores.
+  if (
+    esAdminOModerador(
+      req.usuario
+    )
+  ) {
+    return true;
+  }
+
+  // Propietario del reporte.
+  return (
+    report.userId !== null &&
+    String(report.userId) ===
+      String(req.usuario.id)
+  );
+}
+
+function puedeUsarMascota(
+  req,
+  pet
+) {
+  if (
+    !req.usuario ||
+    !pet
+  ) {
+    return false;
+  }
+
+  // Admin / moderador pueden operar
+  // sobre cualquier mascota.
+  if (
+    esAdminOModerador(
+      req.usuario
+    )
+  ) {
+    return true;
+  }
+
+  // Usuario normal:
+  // la mascota tiene que ser suya.
+  return (
+    pet.ownerId !== null &&
+    pet.ownerId !== undefined &&
+    String(pet.ownerId) ===
+      String(req.usuario.id)
+  );
+}
 
 // ======================================================
 // GET /api/lost-reports
@@ -122,7 +199,6 @@ async function listarMios(
         req.usuario.id,
     };
 
-    // Permite filtrar:
     // /mine?status=active
     // /mine?status=resolved
     if (req.query.status) {
@@ -220,6 +296,10 @@ async function crear(
         });
     }
 
+    // ==========================================
+    // AUTENTICACIÓN
+    // ==========================================
+
     if (!req.usuario) {
       await transaction.rollback();
 
@@ -250,9 +330,9 @@ async function crear(
       internalNotes,
     } = req.body;
 
-    // ==================================================
-    // VALIDACIONES
-    // ==================================================
+    // ==========================================
+    // VALIDACIONES BÁSICAS
+    // ==========================================
 
     if (!petId) {
       await transaction.rollback();
@@ -265,7 +345,10 @@ async function crear(
         });
     }
 
-    if (!address) {
+    if (
+      !address ||
+      !String(address).trim()
+    ) {
       await transaction.rollback();
 
       return res
@@ -276,9 +359,9 @@ async function crear(
         });
     }
 
-    // ==================================================
+    // ==========================================
     // COMPROBAR MASCOTA
-    // ==================================================
+    // ==========================================
 
     const pet =
       await Pet.findByPk(
@@ -299,18 +382,45 @@ async function crear(
         });
     }
 
-    // ==================================================
-    // PASO 1: CREAR LOCATION
-    // ==================================================
+    // ==========================================
+    // SEGURIDAD:
+    // COMPROBAR PROPIETARIO DE LA MASCOTA
+    // ==========================================
+
+    if (
+      !puedeUsarMascota(
+        req,
+        pet
+      )
+    ) {
+      await transaction.rollback();
+
+      return res
+        .status(403)
+        .json({
+          error:
+            "No podés crear un reporte para una mascota que no te pertenece.",
+        });
+    }
+
+    // ==========================================
+    // CREAR LOCATION
+    // ==========================================
 
     const location =
       await Location.create(
         {
-          address,
+          address:
+            String(
+              address
+            ).trim(),
 
           neighborhood:
-            neighborhood ||
-            null,
+            neighborhood
+              ? String(
+                  neighborhood
+                ).trim()
+              : null,
 
           latitude:
             latitude !==
@@ -335,9 +445,9 @@ async function crear(
         }
       );
 
-    // ==================================================
-    // PASO 2: CREAR LOST REPORT
-    // ==================================================
+    // ==========================================
+    // CREAR LOST REPORT
+    // ==========================================
 
     const report =
       await LostReport.create(
@@ -345,6 +455,9 @@ async function crear(
           petId:
             pet.id,
 
+          // Nunca aceptamos userId
+          // enviado por el frontend.
+          // Siempre viene del JWT.
           userId:
             req.usuario.id,
 
@@ -356,16 +469,25 @@ async function crear(
             null,
 
           contactName:
-            contactName ||
-            null,
+            contactName
+              ? String(
+                  contactName
+                ).trim()
+              : null,
 
           contactPhone:
-            contactPhone ||
-            null,
+            contactPhone
+              ? String(
+                  contactPhone
+                ).trim()
+              : null,
 
           contactEmail:
-            contactEmail ||
-            null,
+            contactEmail
+              ? String(
+                  contactEmail
+                ).trim()
+              : null,
 
           rewardAmount:
             rewardAmount !==
@@ -377,12 +499,18 @@ async function crear(
               : null,
 
           publicNotes:
-            publicNotes ||
-            null,
+            publicNotes
+              ? String(
+                  publicNotes
+                ).trim()
+              : null,
 
           internalNotes:
-            internalNotes ||
-            null,
+            internalNotes
+              ? String(
+                  internalNotes
+                ).trim()
+              : null,
 
           status:
             "active",
@@ -396,9 +524,9 @@ async function crear(
 
     committed = true;
 
-    // ==================================================
+    // ==========================================
     // DEVOLVER REPORTE COMPLETO
-    // ==================================================
+    // ==========================================
 
     const completeReport =
       await LostReport.findByPk(
@@ -433,43 +561,6 @@ async function crear(
 }
 
 // ======================================================
-// PERMISOS
-// ======================================================
-
-function puedeModificar(
-  req,
-  report
-) {
-  if (!req.usuario) {
-    return false;
-  }
-
-  // ADMIN / MODERADOR
-  if (
-    req.usuario.role ===
-      "admin" ||
-    req.usuario.role ===
-      "ADMIN" ||
-    req.usuario.role ===
-      "moderator"
-  ) {
-    return true;
-  }
-
-  // PROPIETARIO DEL REPORTE
-  return (
-    report.userId !==
-      null &&
-    String(
-      report.userId
-    ) ===
-      String(
-        req.usuario.id
-      )
-  );
-}
-
-// ======================================================
 // PUT /api/lost-reports/:id
 // ======================================================
 
@@ -493,6 +584,11 @@ async function actualizar(
         });
     }
 
+    // ==========================================
+    // SEGURIDAD:
+    // PROPIETARIO / ADMIN / MODERADOR
+    // ==========================================
+
     if (
       !puedeModificar(
         req,
@@ -506,6 +602,20 @@ async function actualizar(
             "No podés editar este reporte.",
         });
     }
+
+    // ==========================================
+    // CAMPOS PERMITIDOS
+    //
+    // IMPORTANTE:
+    // NO incluimos:
+    // - id
+    // - userId
+    // - petId
+    // - locationId
+    //
+    // Evita cambiar propietario/mascota
+    // mediante mass assignment.
+    // ==========================================
 
     const campos = [
       "lastSeenAt",
@@ -521,15 +631,11 @@ async function actualizar(
     campos.forEach(
       (campo) => {
         if (
-          req.body[
-            campo
-          ] !==
+          req.body[campo] !==
           undefined
         ) {
           report[campo] =
-            req.body[
-              campo
-            ];
+            req.body[campo];
         }
       }
     );
@@ -576,6 +682,11 @@ async function eliminar(
             "Reporte de mascota perdida no encontrado.",
         });
     }
+
+    // ==========================================
+    // SEGURIDAD:
+    // PROPIETARIO / ADMIN / MODERADOR
+    // ==========================================
 
     if (
       !puedeModificar(

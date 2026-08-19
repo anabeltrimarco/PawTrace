@@ -1361,29 +1361,23 @@ export default function MapView() {
         ==================================== */}
 
         {visibleMarkers.map(
-          (marker) => (
-            <Marker
-              key={`${marker.type}-${marker.id}`}
-              position={[
-                marker.latitude,
-                marker.longitude,
-              ]}
-              icon={
-                marker.type ===
-                "lost"
-                  ? lostIcon
-                  : marker.type === "found"
-                  ? foundIcon
-                  : sightingIcon
-              }
-              zIndexOffset={
-                marker.type === "lost"
-                  ? 3000
-                  : marker.type === "found"
-                  ? 2000
-                  : 1000
-              }
-            >
+          (marker) => {
+            const markerIcon =
+              marker.type === "lost"
+                ? lostIcon
+                : marker.type === "found"
+                ? foundIcon
+                : sightingIcon;
+
+            return (
+              <Marker
+                key={`${marker.type}-${marker.id}`}
+                position={[
+                  marker.latitude,
+                  marker.longitude,
+                ]}
+                icon={markerIcon}
+              >
               <Popup>
                 <div
                   style={{
@@ -1544,7 +1538,8 @@ export default function MapView() {
                 </div>
               </Popup>
             </Marker>
-          )
+            );
+          }
         )}
       </MapContainer>
     </div>

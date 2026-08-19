@@ -1,56 +1,102 @@
-const multer = require("multer");
-const path = require("path");
+const multer =
+  require("multer");
 
-const storage = multer.memoryStorage();
+const path =
+  require("path");
 
-const fileFilter = (req, file, cb) => {
-  const allowedMimeTypes = [
-    "image/jpeg",
-    "image/jpg",
-    "image/png",
-    "image/webp",
-  ];
+// ==========================================
+// STORAGE
+// ==========================================
 
-  const allowedExtensions = [
-    ".jpg",
-    ".jpeg",
-    ".png",
-    ".webp",
-  ];
+const storage =
+  multer.memoryStorage();
 
-  const extension = path
-    .extname(file.originalname)
-    .toLowerCase();
+// ==========================================
+// FORMATOS PERMITIDOS
+// ==========================================
 
-  const mimeOk = allowedMimeTypes.includes(
-    file.mimetype
-  );
+const allowedMimeTypes = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+];
+
+const allowedExtensions = [
+  ".jpg",
+  ".jpeg",
+  ".png",
+  ".webp",
+];
+
+// ==========================================
+// FILTRO
+// ==========================================
+
+function fileFilter(
+  req,
+  file,
+  cb
+) {
+  const extension =
+    path
+      .extname(
+        file.originalname
+      )
+      .toLowerCase();
+
+  const mimeOk =
+    allowedMimeTypes.includes(
+      file.mimetype
+    );
 
   const extensionOk =
-    allowedExtensions.includes(extension);
+    allowedExtensions.includes(
+      extension
+    );
 
-  if (mimeOk && extensionOk) {
-    cb(null, true);
-    return;
+  if (
+    mimeOk &&
+    extensionOk
+  ) {
+    return cb(
+      null,
+      true
+    );
   }
 
-  cb(
+  return cb(
     new Error(
-      "Formato no permitido. Usá JPG, JPEG, PNG o WEBP."
+      "Formato de imagen no permitido. Usá JPG, JPEG, PNG o WEBP."
     ),
     false
   );
-};
+}
 
-const avatarUpload = multer({
-  storage,
+// ==========================================
+// MULTER
+// ==========================================
 
-  fileFilter,
+const avatarUpload =
+  multer({
+    storage,
 
-  limits: {
-    // 5 MB máximo para avatar.
-    fileSize: 5 * 1024 * 1024,
-  },
-});
+    fileFilter,
 
-module.exports = avatarUpload;
+    limits: {
+      // Máximo 5 MB.
+      fileSize:
+        5 *
+        1024 *
+        1024,
+
+      // Solo un archivo.
+      files: 1,
+
+      // Evita formularios multipart
+      // con cantidades absurdas de campos.
+      fields: 10,
+    },
+  });
+
+module.exports =
+  avatarUpload;

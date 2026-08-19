@@ -235,13 +235,15 @@ function getDistanceScore(distance) {
     return 0;
   }
 
-  if (distance <= 1) return 15;
-  if (distance <= 3) return 12;
-  if (distance <= 5) return 10;
-  if (distance <= 10) return 7;
-  if (distance <= 20) return 4;
-  if (distance <= 50) return 1;
-  if (distance <= 100) return -5;
+  // La distancia ayuda, pero nunca debe
+  // dominar el matching.
+  if (distance <= 1) return 8;
+  if (distance <= 3) return 6;
+  if (distance <= 5) return 5;
+  if (distance <= 10) return 3;
+  if (distance <= 20) return 1;
+  if (distance <= 50) return 0;
+  if (distance <= 100) return -8;
 
   return -20;
 }
@@ -251,10 +253,13 @@ function getDistanceScore(distance) {
 // ==========================================
 
 function getLostPhoto(lostReport) {
-  const photos = lostReport?.pet?.photos || [];
+  const photos =
+    lostReport?.pet?.photos || [];
 
   return (
-    photos.find((photo) => photo.isMain) ||
+    photos.find(
+      (photo) => photo.isMain
+    ) ||
     photos[0] ||
     null
   );
@@ -265,10 +270,13 @@ function getLostPhoto(lostReport) {
 // ==========================================
 
 function getFoundPhoto(foundReport) {
-  const photos = foundReport?.photos || [];
+  const photos =
+    foundReport?.photos || [];
 
   return (
-    photos.find((photo) => photo.isMain) ||
+    photos.find(
+      (photo) => photo.isMain
+    ) ||
     photos[0] ||
     null
   );
@@ -279,10 +287,13 @@ function getFoundPhoto(foundReport) {
 // ==========================================
 
 function getSightingPhoto(sighting) {
-  const photos = sighting?.photos || [];
+  const photos =
+    sighting?.photos || [];
 
   return (
-    photos.find((photo) => photo.isMain) ||
+    photos.find(
+      (photo) => photo.isMain
+    ) ||
     photos[0] ||
     null
   );
@@ -292,7 +303,10 @@ function getSightingPhoto(sighting) {
 // TIPO DE RELACIÓN ENTRE RAZAS
 // ==========================================
 
-function getBreedRelation(lostBreed, candidateBreed) {
+function getBreedRelation(
+  lostBreed,
+  candidateBreed
+) {
   const normalizedLost =
     normalizeBreed(lostBreed);
 
@@ -300,24 +314,33 @@ function getBreedRelation(lostBreed, candidateBreed) {
     normalizeBreed(candidateBreed);
 
   const lostGeneric =
-    isGenericBreed(normalizedLost);
+    isGenericBreed(
+      normalizedLost
+    );
 
   const candidateGeneric =
-    isGenericBreed(normalizedCandidate);
+    isGenericBreed(
+      normalizedCandidate
+    );
 
   const bothGeneric =
-    lostGeneric && candidateGeneric;
+    lostGeneric &&
+    candidateGeneric;
 
   const bothSpecific =
-    !lostGeneric && !candidateGeneric;
+    !lostGeneric &&
+    !candidateGeneric;
 
   const specificToGeneric =
-    (!lostGeneric && candidateGeneric) ||
-    (lostGeneric && !candidateGeneric);
+    (!lostGeneric &&
+      candidateGeneric) ||
+    (lostGeneric &&
+      !candidateGeneric);
 
   return {
     lostGeneric,
-    foundGeneric: candidateGeneric,
+    foundGeneric:
+      candidateGeneric,
     candidateGeneric,
     bothGeneric,
     bothSpecific,
@@ -329,59 +352,101 @@ function getBreedRelation(lostBreed, candidateBreed) {
 // NORMALIZAR DESTINO DEL MATCH
 // ==========================================
 
-function normalizeTarget(target, targetType) {
+function normalizeTarget(
+  target,
+  targetType
+) {
   if (!target) {
     return null;
   }
 
-  if (targetType === "sighting") {
-    const photo = getSightingPhoto(target);
+  if (
+    targetType === "sighting"
+  ) {
+    const photo =
+      getSightingPhoto(target);
 
     return {
       id: target.id,
-      targetType: "sighting",
-      species: target.species,
-      breed: target.breed || null,
-      color: target.color || null,
-      size: target.size || null,
+
+      targetType:
+        "sighting",
+
+      species:
+        target.species,
+
+      breed:
+        target.breed || null,
+
+      color:
+        target.color || null,
+
+      size:
+        target.size || null,
+
       description:
         target.description ||
         target.notes ||
         null,
+
       photo:
         photo?.imageUrl ||
         photo?.url ||
         null,
-      location: target.location || null,
+
+      location:
+        target.location ||
+        null,
+
       date:
         target.sightedAt ||
         target.created_at ||
         target.createdAt ||
         null,
+
       raw: target,
     };
   }
 
-  const photo = getFoundPhoto(target);
+  const photo =
+    getFoundPhoto(target);
 
   return {
     id: target.id,
+
     targetType: "found",
-    species: target.species,
-    breed: target.breed || null,
-    color: target.color || null,
-    size: target.size || null,
-    description: target.description || null,
+
+    species:
+      target.species,
+
+    breed:
+      target.breed || null,
+
+    color:
+      target.color || null,
+
+    size:
+      target.size || null,
+
+    description:
+      target.description ||
+      null,
+
     photo:
       photo?.imageUrl ||
       photo?.url ||
       null,
-    location: target.location || null,
+
+    location:
+      target.location ||
+      null,
+
     date:
       target.foundAt ||
       target.created_at ||
       target.createdAt ||
       null,
+
     raw: target,
   };
 }
@@ -400,7 +465,10 @@ function calculateCandidate(
   }
 
   const normalizedTarget =
-    normalizeTarget(target, targetType);
+    normalizeTarget(
+      target,
+      targetType
+    );
 
   if (!normalizedTarget) {
     return null;
@@ -409,26 +477,36 @@ function calculateCandidate(
   // ESPECIE
 
   const lostSpecies =
-    normalizeText(lostReport.pet.species);
+    normalizeText(
+      lostReport.pet.species
+    );
 
   const targetSpecies =
-    normalizeText(normalizedTarget.species);
+    normalizeText(
+      normalizedTarget.species
+    );
 
   if (
     !lostSpecies ||
     !targetSpecies ||
-    lostSpecies !== targetSpecies
+    lostSpecies !==
+      targetSpecies
   ) {
     return null;
   }
-
+    // ==========================================
   // RAZA
+  // ==========================================
 
   const lostBreed =
-    normalizeBreed(lostReport.pet.breed);
+    normalizeBreed(
+      lostReport.pet.breed
+    );
 
   const targetBreed =
-    normalizeBreed(normalizedTarget.breed);
+    normalizeBreed(
+      normalizedTarget.breed
+    );
 
   const breedRelation =
     getBreedRelation(
@@ -443,83 +521,167 @@ function calculateCandidate(
     );
 
   let score = 0;
+
   const reasons = [];
 
+  // ==========================================
   // MISMA ESPECIE
+  // ==========================================
 
-  score += 20;
-  reasons.push("Misma especie");
+  // Antes sumaba 20.
+  // Ahora pesa menos porque ser perro/gato
+  // no alcanza para inferir identidad.
+  score += 10;
 
+  reasons.push(
+    "Misma especie"
+  );
+
+  // ==========================================
   // TAMAÑO
+  // ==========================================
 
   const lostSize =
-    normalizeText(lostReport.pet.size);
+    normalizeText(
+      lostReport.pet.size
+    );
 
   const targetSize =
-    normalizeText(normalizedTarget.size);
+    normalizeText(
+      normalizedTarget.size
+    );
 
   const hasBothSizes =
-    Boolean(lostSize && targetSize);
+    Boolean(
+      lostSize &&
+      targetSize
+    );
 
   const sameSize =
     hasBothSizes &&
-    lostSize === targetSize;
+    lostSize ===
+      targetSize;
 
   const sizeConflict =
     hasBothSizes &&
     !sameSize;
 
   if (sameSize) {
-    score += 15;
-    reasons.push("Mismo tamaño");
-  } else if (sizeConflict) {
-    score -= 10;
-    reasons.push("Tamaño diferente");
+    score += 7;
+
+    reasons.push(
+      "Mismo tamaño"
+    );
+  } else if (
+    sizeConflict
+  ) {
+    score -= 12;
+
+    reasons.push(
+      "Tamaño diferente"
+    );
   }
 
+  // ==========================================
   // RAZA
+  // ==========================================
 
-  let breedConflict = false;
+  let breedConflict =
+    false;
 
   const sameGenericBreed =
     breedRelation.bothGeneric &&
-    Boolean(lostBreed && targetBreed) &&
-    lostBreed === targetBreed;
+    Boolean(
+      lostBreed &&
+      targetBreed
+    ) &&
+    lostBreed ===
+      targetBreed;
 
-  if (sameGenericBreed) {
+  if (
+    sameGenericBreed
+  ) {
+    // Coincidencia genérica:
+    // ayuda poco.
+    score += 3;
+
     reasons.push(
-      lostBreed === "mestizo"
-        ? "Ambos mestizos"
+      lostBreed ===
+        "mestizo"
+        ? "Ambos clasificados como mestizos"
         : "Raza genérica coincidente"
     );
-  } else if (breedRelation.specificToGeneric) {
+  } else if (
+    breedRelation
+      .specificToGeneric
+  ) {
+    // Caso importante:
+    // "Mestizo" vs "Pastor Alemán"
+    // NO debe sumar.
+    //
+    // Tampoco lo consideramos una
+    // contradicción absoluta porque un
+    // usuario puede etiquetar mal la raza.
+    score -= 5;
+
     reasons.push(
-      "Raza específica contra clasificación genérica"
+      "Raza no concluyente: clasificación genérica frente a específica"
     );
-  } else if (breedRelation.bothGeneric) {
-    reasons.push("Raza no concluyente");
-  } else if (breedSimilarity >= 0.8) {
-    score += 25;
-    reasons.push("Raza muy similar");
-  } else if (breedSimilarity >= 0.4) {
-    score += 12;
-    reasons.push("Raza parcialmente similar");
-  } else if (lostBreed && targetBreed) {
-    breedConflict = true;
+  } else if (
+    breedRelation.bothGeneric
+  ) {
+    reasons.push(
+      "Raza no concluyente"
+    );
+  } else if (
+    breedSimilarity >= 0.8
+  ) {
+    score += 15;
+
+    reasons.push(
+      "Raza muy similar"
+    );
+  } else if (
+    breedSimilarity >= 0.4
+  ) {
+    score += 6;
+
+    reasons.push(
+      "Raza parcialmente similar"
+    );
+  } else if (
+    lostBreed &&
+    targetBreed
+  ) {
+    breedConflict =
+      true;
+
     score -= 30;
-    reasons.push("Raza incompatible");
+
+    reasons.push(
+      "Raza incompatible"
+    );
   }
 
+  // ==========================================
   // COLOR
+  // ==========================================
 
   const lostColor =
-    normalizeText(lostReport.pet.color);
+    normalizeText(
+      lostReport.pet.color
+    );
 
   const targetColor =
-    normalizeText(normalizedTarget.color);
+    normalizeText(
+      normalizedTarget.color
+    );
 
   const hasBothColors =
-    Boolean(lostColor && targetColor);
+    Boolean(
+      lostColor &&
+      targetColor
+    );
 
   const colorSimilarity =
     textSimilarity(
@@ -527,7 +689,8 @@ function calculateCandidate(
       targetColor
     );
 
-  let colorConflict = false;
+  let colorConflict =
+    false;
 
   const sameColor =
     hasBothColors &&
@@ -539,62 +702,95 @@ function calculateCandidate(
     colorSimilarity < 0.8;
 
   if (sameColor) {
-    score += 15;
-    reasons.push("Color muy similar");
-  } else if (partialColor) {
+    // Antes +15.
+    // Ahora el color ayuda,
+    // pero no domina.
     score += 8;
+
+    reasons.push(
+      "Color muy similar"
+    );
+  } else if (
+    partialColor
+  ) {
+    score += 3;
+
     reasons.push(
       "Color parcialmente similar"
     );
-  } else if (hasBothColors) {
-    score -= 10;
-    colorConflict = true;
-    reasons.push("Color diferente");
-  }
+  } else if (
+    hasBothColors
+  ) {
+    score -= 15;
 
-  // ========================================
-  // DISTANCIA - GPS OPCIONAL
-  // ========================================
-
-  const distance = distanceKm(
-    lostReport?.location?.latitude,
-    lostReport?.location?.longitude,
-    normalizedTarget?.location?.latitude,
-    normalizedTarget?.location?.longitude
-  );
-
-  if (distance !== null) {
-    const distanceScore =
-      getDistanceScore(distance);
-
-    score += distanceScore;
+    colorConflict =
+      true;
 
     reasons.push(
-      `A ${distance.toFixed(1)} km`
+      "Color diferente"
+    );
+  }
+
+  // ==========================================
+  // DISTANCIA
+  // ==========================================
+
+  const distance =
+    distanceKm(
+      lostReport?.location
+        ?.latitude,
+
+      lostReport?.location
+        ?.longitude,
+
+      normalizedTarget
+        ?.location
+        ?.latitude,
+
+      normalizedTarget
+        ?.location
+        ?.longitude
     );
 
-    if (distance > 100) {
-      reasons.push("Distancia muy grande");
-    } else if (distance > 50) {
-      reasons.push("Ubicación lejana");
+  if (
+    distance !== null
+  ) {
+    const distanceScore =
+      getDistanceScore(
+        distance
+      );
+
+    score +=
+      distanceScore;
+
+    reasons.push(
+      `A ${distance.toFixed(
+        1
+      )} km`
+    );
+
+    if (
+      distance > 100
+    ) {
+      reasons.push(
+        "Distancia muy grande"
+      );
+    } else if (
+      distance > 50
+    ) {
+      reasons.push(
+        "Ubicación lejana"
+      );
     }
   } else {
     reasons.push(
       "Ubicación no disponible; coincidencia evaluada sin distancia"
     );
-
-    if (
-      sameSize &&
-      sameColor &&
-      sameGenericBreed
-    ) {
-      score += 5;
-
-      reasons.push(
-        "Datos físicos muy compatibles"
-      );
-    }
   }
+
+  // ==========================================
+  // SCORE DE DATOS
+  // ==========================================
 
   const candidateScore =
     Math.max(
@@ -606,7 +802,9 @@ function calculateCandidate(
     );
 
   const lostPhoto =
-    getLostPhoto(lostReport);
+    getLostPhoto(
+      lostReport
+    );
 
   const foundReportId =
     targetType === "found"
@@ -614,167 +812,283 @@ function calculateCandidate(
       : null;
 
   const sightingId =
-    targetType === "sighting"
+    targetType ===
+    "sighting"
       ? normalizedTarget.id
       : null;
 
   return {
     targetType,
-    lostReportId: lostReport.id,
+
+    lostReportId:
+      lostReport.id,
+
     foundReportId,
+
     sightingId,
+
     candidateScore,
-    imageSimilarity: null,
-    rawImageSimilarity: null,
-    finalScore: candidateScore,
+
+    imageSimilarity:
+      null,
+
+    rawImageSimilarity:
+      null,
+
+    // IMPORTANTE:
+    // todavía no consideramos este
+    // score como resultado final.
+    finalScore:
+      candidateScore,
+
     reasons,
 
     distanceKm:
       distance === null
         ? null
-        : Number(distance.toFixed(2)),
+        : Number(
+            distance.toFixed(
+              2
+            )
+          ),
 
     compatibility: {
       breedSimilarity:
         Math.round(
-          breedSimilarity * 100
+          breedSimilarity *
+            100
         ),
 
       colorSimilarity:
         Math.round(
-          colorSimilarity * 100
+          colorSimilarity *
+            100
         ),
 
       breedConflict,
+
       colorConflict,
+
       sizeConflict,
+
       sameSize,
+
       sameColor,
+
       partialColor,
 
       genericBreed:
-        breedRelation.lostGeneric ||
-        breedRelation.candidateGeneric,
+        breedRelation
+          .lostGeneric ||
+        breedRelation
+          .candidateGeneric,
 
       bothGenericBreed:
-        breedRelation.bothGeneric,
+        breedRelation
+          .bothGeneric,
 
       bothSpecificBreed:
-        breedRelation.bothSpecific,
+        breedRelation
+          .bothSpecific,
 
       specificToGenericBreed:
-        breedRelation.specificToGeneric,
+        breedRelation
+          .specificToGeneric,
 
       sameGenericBreed,
     },
 
     lost: {
-      id: lostReport.id,
+      id:
+        lostReport.id,
 
       petId:
         lostReport.petId ||
         lostReport.pet.id,
 
       name:
-        lostReport.pet.name ||
+        lostReport.pet
+          .name ||
         "Mascota perdida",
 
       species:
-        lostReport.pet.species,
+        lostReport.pet
+          .species,
 
       breed:
-        lostReport.pet.breed || null,
+        lostReport.pet
+          .breed ||
+        null,
 
       color:
-        lostReport.pet.color || null,
+        lostReport.pet
+          .color ||
+        null,
 
       size:
-        lostReport.pet.size || null,
+        lostReport.pet
+          .size ||
+        null,
 
       description:
-        lostReport.pet.description ||
+        lostReport.pet
+          .description ||
         null,
 
       photo:
-        lostPhoto?.imageUrl ||
+        lostPhoto
+          ?.imageUrl ||
         lostPhoto?.url ||
         null,
 
       location:
-        lostReport.location || null,
+        lostReport.location ||
+        null,
 
       date:
-        lostReport.lastSeenAt ||
-        lostReport.created_at ||
-        lostReport.createdAt ||
+        lostReport
+          .lastSeenAt ||
+        lostReport
+          .created_at ||
+        lostReport
+          .createdAt ||
         null,
     },
 
     target: {
-      id: normalizedTarget.id,
-      type: targetType,
-      species: normalizedTarget.species,
-      breed: normalizedTarget.breed,
-      color: normalizedTarget.color,
-      size: normalizedTarget.size,
+      id:
+        normalizedTarget.id,
+
+      type:
+        targetType,
+
+      species:
+        normalizedTarget
+          .species,
+
+      breed:
+        normalizedTarget
+          .breed,
+
+      color:
+        normalizedTarget
+          .color,
+
+      size:
+        normalizedTarget
+          .size,
+
       description:
-        normalizedTarget.description,
-      photo: normalizedTarget.photo,
-      location: normalizedTarget.location,
-      date: normalizedTarget.date,
+        normalizedTarget
+          .description,
+
+      photo:
+        normalizedTarget
+          .photo,
+
+      location:
+        normalizedTarget
+          .location,
+
+      date:
+        normalizedTarget
+          .date,
     },
 
     found: {
-      id: normalizedTarget.id,
-      species: normalizedTarget.species,
-      breed: normalizedTarget.breed,
-      color: normalizedTarget.color,
-      size: normalizedTarget.size,
+      id:
+        normalizedTarget.id,
+
+      species:
+        normalizedTarget
+          .species,
+
+      breed:
+        normalizedTarget
+          .breed,
+
+      color:
+        normalizedTarget
+          .color,
+
+      size:
+        normalizedTarget
+          .size,
+
       description:
-        normalizedTarget.description,
-      photo: normalizedTarget.photo,
-      location: normalizedTarget.location,
-      date: normalizedTarget.date,
-      type: targetType,
+        normalizedTarget
+          .description,
+
+      photo:
+        normalizedTarget
+          .photo,
+
+      location:
+        normalizedTarget
+          .location,
+
+      date:
+        normalizedTarget
+          .date,
+
+      type:
+        targetType,
+
       isSighting:
-        targetType === "sighting",
+        targetType ===
+        "sighting",
     },
 
     sighting:
-      targetType === "sighting"
+      targetType ===
+      "sighting"
         ? {
-            id: normalizedTarget.id,
+            id:
+              normalizedTarget.id,
+
             species:
-              normalizedTarget.species,
+              normalizedTarget
+                .species,
+
             breed:
-              normalizedTarget.breed,
+              normalizedTarget
+                .breed,
+
             color:
-              normalizedTarget.color,
+              normalizedTarget
+                .color,
+
             size:
-              normalizedTarget.size,
+              normalizedTarget
+                .size,
+
             description:
-              normalizedTarget.description,
+              normalizedTarget
+                .description,
+
             photo:
-              normalizedTarget.photo,
+              normalizedTarget
+                .photo,
+
             location:
-              normalizedTarget.location,
+              normalizedTarget
+                .location,
+
             date:
-              normalizedTarget.date,
+              normalizedTarget
+                .date,
           }
         : null,
   };
 }
+
 // ==========================================
 // COMPARACIÓN ANIMAL RE-ID
-//
-// Funciona para:
-// LostReport ↔ FoundReport
-// LostReport ↔ Sighting
-//
-// DINOv2 + MegaDescriptor
 // ==========================================
 
-async function addImageSimilarity(candidate) {
+async function addImageSimilarity(
+  candidate
+) {
   const lostPhoto =
     candidate?.lost?.photo;
 
@@ -783,20 +1097,51 @@ async function addImageSimilarity(candidate) {
     candidate?.found?.photo ||
     candidate?.sighting?.photo;
 
-  if (!lostPhoto || !targetPhoto) {
-    candidate.imageSimilarity = null;
-    candidate.rawImageSimilarity = null;
-    candidate.megaSimilarity = null;
-    candidate.dinoSimilarity = null;
+  // ========================================
+  // SIN DOS FOTOS
+  // ========================================
+
+  if (
+    !lostPhoto ||
+    !targetPhoto
+  ) {
+    candidate.imageSimilarity =
+      null;
+
+    candidate.rawImageSimilarity =
+      null;
+
+    candidate.megaSimilarity =
+      null;
+
+    candidate.dinoSimilarity =
+      null;
+
+    // El score de datos queda visible,
+    // pero NO se convierte 1 a 1
+    // en resultado final.
+    //
+    // Sin comparación visual,
+    // limitamos la confianza.
+    candidate.finalScore =
+      Math.min(
+        49,
+        Math.round(
+          candidate
+            .candidateScore *
+            0.65
+        )
+      );
 
     candidate.hybridScore =
-      candidate.candidateScore;
-
-    candidate.finalScore =
-      candidate.candidateScore;
+      candidate.finalScore;
 
     candidate.reasons.push(
-      "Sin dos fotos para comparación Animal Re-ID"
+      "Comparación visual no disponible: faltan dos fotos"
+    );
+
+    candidate.reasons.push(
+      "Resultado preliminar de baja confianza"
     );
 
     return candidate;
@@ -804,8 +1149,11 @@ async function addImageSimilarity(candidate) {
 
   try {
     const isSighting =
-      candidate.targetType === "sighting" ||
-      Boolean(candidate.sightingId);
+      candidate.targetType ===
+        "sighting" ||
+      Boolean(
+        candidate.sightingId
+      );
 
     const targetEntityType =
       isSighting
@@ -821,7 +1169,8 @@ async function addImageSimilarity(candidate) {
       "🧠 Comparando Re-ID híbrido:",
       {
         perdida:
-          candidate.lostReportId,
+          candidate
+            .lostReportId,
 
         tipoDestino:
           isSighting
@@ -834,40 +1183,53 @@ async function addImageSimilarity(candidate) {
     );
 
     const lostEmbeddings =
-      await getHybridEmbeddings({
-        entityType:
-          "lost_report",
+      await getHybridEmbeddings(
+        {
+          entityType:
+            "lost_report",
 
-        entityId:
-          candidate.lostReportId,
+          entityId:
+            candidate
+              .lostReportId,
 
-        imageUrl:
-          lostPhoto,
-      });
+          imageUrl:
+            lostPhoto,
+        }
+      );
 
     const targetEmbeddings =
-      await getHybridEmbeddings({
-        entityType:
-          targetEntityType,
+      await getHybridEmbeddings(
+        {
+          entityType:
+            targetEntityType,
 
-        entityId:
-          targetEntityId,
+          entityId:
+            targetEntityId,
 
-        imageUrl:
-          targetPhoto,
-      });
+          imageUrl:
+            targetPhoto,
+        }
+      );
 
     const lostMegaVector =
-      lostEmbeddings?.mega?.embedding;
+      lostEmbeddings
+        ?.mega
+        ?.embedding;
 
     const targetMegaVector =
-      targetEmbeddings?.mega?.embedding;
+      targetEmbeddings
+        ?.mega
+        ?.embedding;
 
     const lostDinoVector =
-      lostEmbeddings?.dino?.embedding;
+      lostEmbeddings
+        ?.dino
+        ?.embedding;
 
     const targetDinoVector =
-      targetEmbeddings?.dino?.embedding;
+      targetEmbeddings
+        ?.dino
+        ?.embedding;
 
     const megaSimilarity =
       cosineSimilarity(
@@ -882,8 +1244,10 @@ async function addImageSimilarity(candidate) {
       );
 
     if (
-      megaSimilarity === null &&
-      dinoSimilarity === null
+      megaSimilarity ===
+        null &&
+      dinoSimilarity ===
+        null
     ) {
       throw new Error(
         "No se pudo calcular ninguna similitud visual."
@@ -898,60 +1262,143 @@ async function addImageSimilarity(candidate) {
 
     candidate.rawImageSimilarity =
       megaSimilarity;
+    // ========================================
+    // NORMALIZAR MEGADESCRIPTOR
+    // ========================================
 
-    function normalizeMega(value) {
+    function normalizeMega(
+      value
+    ) {
       if (
         value === null ||
-        !Number.isFinite(value)
+        !Number.isFinite(
+          value
+        )
       ) {
         return 0;
       }
 
-      if (value >= 0.60) return 100;
-      if (value >= 0.45) return 90;
-      if (value >= 0.35) return 80;
-      if (value >= 0.25) return 70;
-      if (value >= 0.18) return 60;
-      if (value >= 0.12) return 50;
-      if (value >= 0.08) return 40;
-      if (value >= 0.04) return 30;
-      if (value >= 0) return 20;
+      if (value >= 0.60) {
+        return 100;
+      }
+
+      if (value >= 0.45) {
+        return 90;
+      }
+
+      if (value >= 0.35) {
+        return 80;
+      }
+
+      if (value >= 0.25) {
+        return 70;
+      }
+
+      if (value >= 0.18) {
+        return 60;
+      }
+
+      if (value >= 0.12) {
+        return 50;
+      }
+
+      if (value >= 0.08) {
+        return 40;
+      }
+
+      if (value >= 0.04) {
+        return 30;
+      }
+
+      if (value >= 0) {
+        return 20;
+      }
 
       return 0;
     }
 
-    function normalizeDino(value) {
+    // ========================================
+    // NORMALIZAR DINOV2
+    // ========================================
+
+    function normalizeDino(
+      value
+    ) {
       if (
         value === null ||
-        !Number.isFinite(value)
+        !Number.isFinite(
+          value
+        )
       ) {
         return 0;
       }
 
-      if (value >= 0.80) return 100;
-      if (value >= 0.70) return 95;
-      if (value >= 0.60) return 90;
-      if (value >= 0.55) return 85;
-      if (value >= 0.50) return 75;
-      if (value >= 0.45) return 65;
-      if (value >= 0.40) return 55;
-      if (value >= 0.35) return 45;
-      if (value >= 0.30) return 35;
-      if (value >= 0.20) return 20;
+      if (value >= 0.80) {
+        return 100;
+      }
+
+      if (value >= 0.70) {
+        return 95;
+      }
+
+      if (value >= 0.60) {
+        return 90;
+      }
+
+      if (value >= 0.55) {
+        return 85;
+      }
+
+      if (value >= 0.50) {
+        return 75;
+      }
+
+      if (value >= 0.45) {
+        return 65;
+      }
+
+      if (value >= 0.40) {
+        return 55;
+      }
+
+      if (value >= 0.35) {
+        return 45;
+      }
+
+      if (value >= 0.30) {
+        return 35;
+      }
+
+      if (value >= 0.20) {
+        return 20;
+      }
 
       return 0;
     }
 
     const megaScore =
-      normalizeMega(megaSimilarity);
+      normalizeMega(
+        megaSimilarity
+      );
 
     const dinoScore =
-      normalizeDino(dinoSimilarity);
+      normalizeDino(
+        dinoSimilarity
+      );
+
+    // ========================================
+    // SCORE VISUAL
+    //
+    // DINOv2 domina.
+    // MegaDescriptor acompaña.
+    // ========================================
 
     const visualScore =
       Math.round(
-        dinoScore * 0.80 +
-        megaScore * 0.20
+        dinoScore *
+          0.75 +
+        megaScore *
+          0.25
       );
 
     candidate.imageSimilarity =
@@ -963,31 +1410,50 @@ async function addImageSimilarity(candidate) {
     candidate.dinoScore =
       dinoScore;
 
+    // ========================================
+    // SCORE FINAL
+    //
+    // La imagen pasa a ser el factor
+    // principal del matching.
+    //
+    // 75% visual
+    // 25% datos
+    // ========================================
+
     let finalScore =
       Math.round(
-        dinoScore * 0.60 +
-        megaScore * 0.15 +
-        candidate.candidateScore * 0.25
+        visualScore *
+          0.75 +
+        candidate
+          .candidateScore *
+          0.25
       );
 
-    // ======================================
+    // ========================================
     // RAZAS ESPECÍFICAS INCOMPATIBLES
-    // ======================================
+    // ========================================
 
     const bothSpecificBreed =
-      candidate.compatibility
-        ?.bothSpecificBreed === true;
+      candidate
+        .compatibility
+        ?.bothSpecificBreed ===
+      true;
 
     const breedConflict =
-      candidate.compatibility
-        ?.breedConflict === true;
+      candidate
+        .compatibility
+        ?.breedConflict ===
+      true;
 
     if (
       bothSpecificBreed &&
       breedConflict
     ) {
-      candidate.finalScore = 0;
-      candidate.hybridScore = 0;
+      candidate.finalScore =
+        0;
+
+      candidate.hybridScore =
+        0;
 
       candidate.reasons.push(
         "Razas específicas incompatibles"
@@ -997,82 +1463,130 @@ async function addImageSimilarity(candidate) {
         "❌ Descartado por raza:",
         {
           perdida:
-            candidate.lost?.breed,
+            candidate
+              .lost
+              ?.breed,
 
           destino:
-            candidate.target?.breed,
+            candidate
+              .target
+              ?.breed,
 
           targetType:
-            candidate.targetType,
+            candidate
+              .targetType,
         }
       );
 
       return candidate;
     }
 
-    // ======================================
-    // DINO FUERTE + DATOS COMPATIBLES
-    // ======================================
+    // ========================================
+    // DINO MUY ALTO
+    // ========================================
 
     if (
-      dinoSimilarity !== null &&
-      dinoSimilarity >= 0.55 &&
-      candidate.candidateScore >= 50
-    ) {
-      finalScore += 8;
-
-      candidate.reasons.push(
-        "DINOv2 y datos físicos fuertemente compatibles"
-      );
-    }
-
-    // ======================================
-    // DINO FUERTE
-    // ======================================
-
-    if (
-      dinoSimilarity !== null &&
-      dinoSimilarity >= 0.55
+      dinoSimilarity !==
+        null &&
+      dinoSimilarity >=
+        0.60
     ) {
       finalScore =
         Math.max(
           finalScore,
-          58
+          70
         );
 
       candidate.reasons.push(
-        "Alta similitud visual DINOv2"
+        "Similitud visual DINOv2 muy alta"
       );
     }
 
-    // ======================================
+    // ========================================
+    // DINO ALTO + DATOS COMPATIBLES
+    // ========================================
+
+    if (
+      dinoSimilarity !==
+        null &&
+      dinoSimilarity >=
+        0.55 &&
+      candidate
+        .candidateScore >=
+        45
+    ) {
+      finalScore += 5;
+
+      candidate.reasons.push(
+        "DINOv2 y datos físicos compatibles"
+      );
+    }
+
+    // ========================================
     // DINO MODERADO
-    // ======================================
+    // ========================================
 
     if (
-      dinoSimilarity !== null &&
-      dinoSimilarity >= 0.45 &&
-      dinoSimilarity < 0.55 &&
-      candidate.candidateScore >= 50
+      dinoSimilarity !==
+        null &&
+      dinoSimilarity >=
+        0.45 &&
+      dinoSimilarity <
+        0.55
     ) {
-      finalScore =
-        Math.max(
-          finalScore,
-          52
-        );
-
       candidate.reasons.push(
-        "Similitud DINOv2 moderada con datos compatibles"
+        "Similitud visual DINOv2 moderada"
       );
     }
 
-    // ======================================
-    // DINO MUY BAJO
-    // ======================================
+    // ========================================
+    // DINO BAJO
+    // ========================================
 
     if (
-      dinoSimilarity !== null &&
-      dinoSimilarity < 0.20
+      dinoSimilarity !==
+        null &&
+      dinoSimilarity <
+        0.30
+    ) {
+      finalScore =
+        Math.min(
+          finalScore,
+          39
+        );
+
+      candidate.reasons.push(
+        "DINOv2 indica baja similitud visual"
+      );
+    }
+
+    // ========================================
+    // DINO MUY BAJO
+    // ========================================
+
+    if (
+      dinoSimilarity !==
+        null &&
+      dinoSimilarity <
+        0.20
+    ) {
+      finalScore =
+        Math.min(
+          finalScore,
+          30
+        );
+
+      candidate.reasons.push(
+        "DINOv2 indica similitud visual muy baja"
+      );
+    }
+
+    // ========================================
+    // SCORE VISUAL MUY BAJO
+    // ========================================
+
+    if (
+      visualScore < 30
     ) {
       finalScore =
         Math.min(
@@ -1081,22 +1595,23 @@ async function addImageSimilarity(candidate) {
         );
 
       candidate.reasons.push(
-        "DINOv2 indica similitud visual muy baja"
+        "La comparación visual no respalda la coincidencia"
       );
     }
 
-    // ======================================
+    // ========================================
     // TAMAÑO DIFERENTE
-    // ======================================
+    // ========================================
 
     if (
-      candidate.compatibility
+      candidate
+        .compatibility
         ?.sizeConflict
     ) {
       finalScore =
         Math.min(
           finalScore,
-          64
+          55
         );
 
       candidate.reasons.push(
@@ -1104,18 +1619,19 @@ async function addImageSimilarity(candidate) {
       );
     }
 
-    // ======================================
+    // ========================================
     // COLOR DIFERENTE
-    // ======================================
+    // ========================================
 
     if (
-      candidate.compatibility
+      candidate
+        .compatibility
         ?.colorConflict
     ) {
       finalScore =
         Math.min(
           finalScore,
-          64
+          50
         );
 
       candidate.reasons.push(
@@ -1123,48 +1639,81 @@ async function addImageSimilarity(candidate) {
       );
     }
 
-    // ======================================
-    // DISTANCIA
-    // Solo se aplica si existe.
-    // ======================================
+    // ========================================
+    // GENÉRICA VS ESPECÍFICA
+    // ========================================
 
     if (
-      candidate.distanceKm !== null &&
-      candidate.distanceKm > 100
+      candidate
+        .compatibility
+        ?.specificToGenericBreed
+    ) {
+      // No descartamos,
+      // pero impedimos que un score
+      // mediocre suba artificialmente.
+      if (
+        visualScore < 60
+      ) {
+        finalScore =
+          Math.min(
+            finalScore,
+            49
+          );
+      }
+
+      candidate.reasons.push(
+        "Raza genérica frente a específica: se requiere apoyo visual"
+      );
+    }
+
+    // ========================================
+    // DISTANCIA
+    // ========================================
+
+    if (
+      candidate.distanceKm !==
+        null &&
+      candidate.distanceKm >
+        100
     ) {
       finalScore =
         Math.min(
           finalScore,
-          44
+          35
         );
 
       candidate.reasons.push(
         "Distancia excesiva"
       );
     } else if (
-      candidate.distanceKm !== null &&
-      candidate.distanceKm > 50
+      candidate.distanceKm !==
+        null &&
+      candidate.distanceKm >
+        50
     ) {
       finalScore =
         Math.min(
           finalScore,
-          54
+          45
         );
+
+      candidate.reasons.push(
+        "Ubicación lejana"
+      );
     }
 
-    // ======================================
-    // REFUERZO PARA AVISTAMIENTOS
-    // ======================================
+    // ========================================
+    // AVISTAMIENTOS
+    // ========================================
 
     if (
       isSighting &&
-      dinoSimilarity !== null &&
-      dinoSimilarity >= 0.50
+      visualScore >= 70
     ) {
       finalScore =
         Math.max(
           finalScore,
-          55
+          60
         );
 
       candidate.reasons.push(
@@ -1172,19 +1721,32 @@ async function addImageSimilarity(candidate) {
       );
     }
 
+    // ========================================
+    // CLAMP FINAL
+    // ========================================
+
     candidate.finalScore =
       Math.max(
         0,
         Math.min(
           100,
-          Math.round(finalScore)
+          Math.round(
+            finalScore
+          )
         )
       );
 
     candidate.hybridScore =
       candidate.finalScore;
 
-    if (megaSimilarity !== null) {
+    // ========================================
+    // EXPLICACIONES TÉCNICAS
+    // ========================================
+
+    if (
+      megaSimilarity !==
+      null
+    ) {
       candidate.reasons.push(
         `MegaDescriptor: ${megaSimilarity.toFixed(
           4
@@ -1192,7 +1754,10 @@ async function addImageSimilarity(candidate) {
       );
     }
 
-    if (dinoSimilarity !== null) {
+    if (
+      dinoSimilarity !==
+      null
+    ) {
       candidate.reasons.push(
         `DINOv2: ${dinoSimilarity.toFixed(
           4
@@ -1221,29 +1786,38 @@ async function addImageSimilarity(candidate) {
           candidate.targetType,
 
         megaSimilarity:
-          megaSimilarity === null
+          megaSimilarity ===
+          null
             ? null
             : Number(
-                megaSimilarity.toFixed(6)
+                megaSimilarity.toFixed(
+                  6
+                )
               ),
 
         dinoSimilarity:
-          dinoSimilarity === null
+          dinoSimilarity ===
+          null
             ? null
             : Number(
-                dinoSimilarity.toFixed(6)
+                dinoSimilarity.toFixed(
+                  6
+                )
               ),
 
         megaScore,
+
         dinoScore,
 
         dataScore:
-          candidate.candidateScore,
+          candidate
+            .candidateScore,
 
         visualScore,
 
         hybridScore:
-          candidate.finalScore,
+          candidate
+            .finalScore,
       }
     );
 
@@ -1254,19 +1828,50 @@ async function addImageSimilarity(candidate) {
       error.message
     );
 
-    candidate.imageSimilarity = null;
-    candidate.rawImageSimilarity = null;
-    candidate.megaSimilarity = null;
-    candidate.dinoSimilarity = null;
+    candidate.imageSimilarity =
+      null;
 
-    candidate.hybridScore =
-      candidate.candidateScore;
+    candidate.rawImageSimilarity =
+      null;
+
+    candidate.megaSimilarity =
+      null;
+
+    candidate.dinoSimilarity =
+      null;
+
+    // ======================================
+    // FALLBACK SEGURO
+    //
+    // Antes:
+    // finalScore = candidateScore
+    //
+    // Ahora:
+    // el dato estructurado solo se usa
+    // como resultado preliminar y nunca
+    // debe producir por sí solo una
+    // coincidencia sugerida fuerte.
+    // ======================================
 
     candidate.finalScore =
-      candidate.candidateScore;
+      Math.min(
+        49,
+        Math.round(
+          candidate
+            .candidateScore *
+            0.65
+        )
+      );
+
+    candidate.hybridScore =
+      candidate.finalScore;
 
     candidate.reasons.push(
       "Animal Re-ID híbrido temporalmente no disponible"
+    );
+
+    candidate.reasons.push(
+      "Resultado preliminar: la comparación visual no pudo completarse"
     );
 
     return candidate;
@@ -1277,7 +1882,9 @@ async function addImageSimilarity(candidate) {
 // CONSTRUIR WHERE DE MATCH
 // ==========================================
 
-function buildMatchWhere(candidate) {
+function buildMatchWhere(
+  candidate
+) {
   if (
     candidate.targetType ===
       "sighting" ||
@@ -1285,19 +1892,23 @@ function buildMatchWhere(candidate) {
   ) {
     return {
       lostReportId:
-        candidate.lostReportId,
+        candidate
+          .lostReportId,
 
       sightingId:
-        candidate.sightingId,
+        candidate
+          .sightingId,
     };
   }
 
   return {
     lostReportId:
-      candidate.lostReportId,
+      candidate
+        .lostReportId,
 
     foundReportId:
-      candidate.foundReportId,
+      candidate
+        .foundReportId,
   };
 }
 
@@ -1311,10 +1922,12 @@ function buildMatchCreateData(
 ) {
   const base = {
     lostReportId:
-      candidate.lostReportId,
+      candidate
+        .lostReportId,
 
     score:
-      candidate.finalScore,
+      candidate
+        .finalScore,
 
     status:
       "pending",
@@ -1330,10 +1943,12 @@ function buildMatchCreateData(
     return {
       ...base,
 
-      foundReportId: null,
+      foundReportId:
+        null,
 
       sightingId:
-        candidate.sightingId,
+        candidate
+          .sightingId,
     };
   }
 
@@ -1341,48 +1956,65 @@ function buildMatchCreateData(
     ...base,
 
     foundReportId:
-      candidate.foundReportId,
+      candidate
+        .foundReportId,
 
-    sightingId: null,
+    sightingId:
+      null,
   };
 }
-
 // ==========================================
 // PERSISTENCIA
 // ==========================================
 
-async function persistCandidate(candidate) {
+async function persistCandidate(
+  candidate
+) {
   const aiReason =
-    candidate.reasons.join(" | ");
+    candidate.reasons.join(
+      " | "
+    );
 
   const matchWhere =
-    buildMatchWhere(candidate);
+    buildMatchWhere(
+      candidate
+    );
 
   let match =
     await Match.findOne({
-      where: matchWhere,
+      where:
+        matchWhere,
     });
+
+  // ========================================
+  // MATCH DESCARTADO PREVIAMENTE
+  // ========================================
 
   if (
     match &&
-    match.status === "rejected"
+    match.status ===
+      "rejected"
   ) {
     console.log(
       "🚫 Match descartado previamente:",
       {
         lostReportId:
-          candidate.lostReportId,
+          candidate
+            .lostReportId,
 
         foundReportId:
-          candidate.foundReportId ||
+          candidate
+            .foundReportId ||
           null,
 
         sightingId:
-          candidate.sightingId ||
+          candidate
+            .sightingId ||
           null,
 
         targetType:
-          candidate.targetType,
+          candidate
+            .targetType,
       }
     );
 
@@ -1397,6 +2029,10 @@ async function persistCandidate(candidate) {
 
     return candidate;
   }
+
+  // ========================================
+  // CREAR NUEVO MATCH
+  // ========================================
 
   if (!match) {
     const createData =
@@ -1417,23 +2053,32 @@ async function persistCandidate(candidate) {
           match.id,
 
         targetType:
-          candidate.targetType,
+          candidate
+            .targetType,
 
         lostReportId:
-          candidate.lostReportId,
+          candidate
+            .lostReportId,
 
         foundReportId:
-          candidate.foundReportId ||
+          candidate
+            .foundReportId ||
           null,
 
         sightingId:
-          candidate.sightingId ||
+          candidate
+            .sightingId ||
           null,
       }
     );
   } else {
+    // ======================================
+    // ACTUALIZAR MATCH EXISTENTE
+    // ======================================
+
     match.score =
-      candidate.finalScore;
+      candidate
+        .finalScore;
 
     match.aiReason =
       aiReason;
@@ -1460,21 +2105,33 @@ async function persistCandidate(candidate) {
 // VALIDAR PREFILTRO
 // ==========================================
 
-function passesPreFilter(candidate) {
+function passesPreFilter(
+  candidate
+) {
   if (!candidate) {
     return false;
   }
 
   const genericCandidate =
-    candidate.compatibility
-      ?.genericBreed === true;
+    candidate
+      .compatibility
+      ?.genericBreed ===
+    true;
 
+  // Si una raza es genérica,
+  // permitimos que llegue a la etapa visual,
+  // porque la foto puede resolver
+  // la ambigüedad.
   if (genericCandidate) {
     return true;
   }
 
+  // Para razas específicas pedimos
+  // al menos un mínimo de compatibilidad.
   if (
-    candidate.candidateScore < 15
+    candidate
+      .candidateScore <
+    10
   ) {
     return false;
   }
@@ -1486,14 +2143,18 @@ function passesPreFilter(candidate) {
 // REGLA DURA DE RAZA
 // ==========================================
 
-function hasHardBreedConflict(candidate) {
+function hasHardBreedConflict(
+  candidate
+) {
   return Boolean(
     candidate
       ?.compatibility
-      ?.bothSpecificBreed === true &&
+      ?.bothSpecificBreed ===
+      true &&
     candidate
       ?.compatibility
-      ?.breedConflict === true
+      ?.breedConflict ===
+      true
   );
 }
 
@@ -1501,57 +2162,107 @@ function hasHardBreedConflict(candidate) {
 // PROCESAR UN CANDIDATO
 // ==========================================
 
-async function processCandidate(candidate) {
+async function processCandidate(
+  candidate
+) {
   if (!candidate) {
     return null;
   }
 
-  if (!passesPreFilter(candidate)) {
+  // ========================================
+  // PREFILTRO DE DATOS
+  // ========================================
+
+  if (
+    !passesPreFilter(
+      candidate
+    )
+  ) {
     return null;
   }
 
-  if (hasHardBreedConflict(candidate)) {
+  // ========================================
+  // RAZA ESPECÍFICA INCOMPATIBLE
+  // ========================================
+
+  if (
+    hasHardBreedConflict(
+      candidate
+    )
+  ) {
     console.log(
       "❌ Descartado antes de IA por raza incompatible:",
       {
         lost:
-          candidate.lost?.breed,
+          candidate
+            .lost
+            ?.breed,
 
         target:
-          candidate.target?.breed,
+          candidate
+            .target
+            ?.breed,
 
         targetType:
-          candidate.targetType,
+          candidate
+            .targetType,
       }
     );
 
     return null;
   }
 
+  // ========================================
+  // COMPARACIÓN VISUAL
+  // ========================================
+
   candidate =
     await addImageSimilarity(
       candidate
     );
 
-  // 55+ = coincidencia posible
+  // ========================================
+  // UMBRAL FINAL
+  //
+  // Solo mostramos una coincidencia
+  // si alcanza 55%.
+  //
+  // Gracias al fallback seguro,
+  // si la IA visual no funciona,
+  // el score queda por debajo
+  // de este umbral.
+  // ========================================
 
-  if (candidate.finalScore < 55) {
+  if (
+    candidate.finalScore <
+    55
+  ) {
     return null;
   }
+
+  // ========================================
+  // PERSISTENCIA
+  // ========================================
 
   candidate =
     await persistCandidate(
       candidate
     );
 
+  // ========================================
+  // NO VOLVER A MOSTRAR DESCARTADOS
+  // ========================================
+
   if (
-    candidate.status === "rejected"
+    candidate.status ===
+    "rejected"
   ) {
     return null;
   }
 
   return candidate;
 }
+
 // ==========================================
 // GENERAR CANDIDATOS
 //
@@ -1568,28 +2279,44 @@ async function generateCandidates() {
   const lostReports =
     await LostReport.findAll({
       where: {
-        status: "active",
+        status:
+          "active",
       },
 
       include: [
         {
-          model: Pet,
-          as: "pet",
-          required: true,
+          model:
+            Pet,
+
+          as:
+            "pet",
+
+          required:
+            true,
 
           include: [
             {
-              model: PetPhoto,
-              as: "photos",
-              required: false,
+              model:
+                PetPhoto,
+
+              as:
+                "photos",
+
+              required:
+                false,
             },
           ],
         },
 
         {
-          model: Location,
-          as: "location",
-          required: false,
+          model:
+            Location,
+
+          as:
+            "location",
+
+          required:
+            false,
         },
       ],
 
@@ -1608,7 +2335,8 @@ async function generateCandidates() {
   const foundReports =
     await FoundReport.findAll({
       where: {
-        status: "active",
+        status:
+          "active",
       },
 
       include: [
@@ -1650,7 +2378,8 @@ async function generateCandidates() {
   const sightings =
     await Sighting.findAll({
       where: {
-        status: "active",
+        status:
+          "active",
       },
 
       include: [
@@ -1713,10 +2442,12 @@ async function generateCandidates() {
   // ========================================
 
   for (
-    const lostReport of lostReports
+    const lostReport of
+    lostReports
   ) {
     for (
-      const foundReport of foundReports
+      const foundReport of
+      foundReports
     ) {
       let candidate =
         calculateCandidate(
@@ -1734,7 +2465,9 @@ async function generateCandidates() {
         continue;
       }
 
-      candidates.push(candidate);
+      candidates.push(
+        candidate
+      );
     }
   }
 
@@ -1743,10 +2476,12 @@ async function generateCandidates() {
   // ========================================
 
   for (
-    const lostReport of lostReports
+    const lostReport of
+    lostReports
   ) {
     for (
-      const sighting of sightings
+      const sighting of
+      sightings
     ) {
       let candidate =
         calculateCandidate(
@@ -1764,7 +2499,9 @@ async function generateCandidates() {
         continue;
       }
 
-      candidates.push(candidate);
+      candidates.push(
+        candidate
+      );
     }
   }
 
@@ -1778,28 +2515,37 @@ async function generateCandidates() {
       candidateB
     ) => {
       const scoreA =
-        candidateA.finalScore ??
-        candidateA.candidateScore;
+        candidateA
+          .finalScore ??
+        candidateA
+          .candidateScore;
 
       const scoreB =
-        candidateB.finalScore ??
-        candidateB.candidateScore;
+        candidateB
+          .finalScore ??
+        candidateB
+          .candidateScore;
 
-      return scoreB - scoreA;
+      return (
+        scoreB -
+        scoreA
+      );
     }
   );
 
   const foundCount =
     candidates.filter(
       (candidate) =>
-        candidate.targetType ===
+        candidate
+          .targetType ===
         "found"
     ).length;
 
   const sightingCount =
     candidates.filter(
       (candidate) =>
-        candidate.targetType ===
+        candidate
+          .targetType ===
         "sighting"
     ).length;
 
@@ -1817,28 +2563,31 @@ async function generateCandidates() {
 
   return candidates;
 }
-
 // ==========================================
 // HELPERS PARA DEBUG / PRUEBAS
 // ==========================================
 
-function isSightingCandidate(candidate) {
+function isSightingCandidate(
+  candidate
+) {
   return Boolean(
     candidate &&
-    (
-      candidate.targetType ===
-        "sighting" ||
-      candidate.sightingId
-    )
+      (
+        candidate.targetType ===
+          "sighting" ||
+        candidate.sightingId
+      )
   );
 }
 
-function isFoundCandidate(candidate) {
+function isFoundCandidate(
+  candidate
+) {
   return Boolean(
     candidate &&
-    candidate.targetType ===
-      "found" &&
-    candidate.foundReportId
+      candidate.targetType ===
+        "found" &&
+      candidate.foundReportId
   );
 }
 
