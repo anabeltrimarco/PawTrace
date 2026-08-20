@@ -10,7 +10,7 @@
 // - Distancia
 // - PetIdentity Fine-grained Re-ID (motor principal)
 // - Consensus Python /compare
-// - MegaDescriptor + DINOv2 (respaldo)
+// - PetIdentity Production Lite como único motor visual
 // - Persistencia
 // - Matching por raza
 // ==========================================
@@ -52,6 +52,48 @@ const ANIMAL_REID_TIMEOUT_MS = Number(
   process.env.ANIMAL_REID_TIMEOUT_MS ||
     120000
 );
+
+// ==========================================
+// COLA GLOBAL PETIDENTITY
+//
+// Aunque generateCandidates procesa cada
+// candidato con await, pueden existir dos
+// requests /matches simultáneos. Esta cola
+// garantiza una sola llamada /compare a la vez
+// desde este proceso del backend.
+// ==========================================
+
+let petIdentityQueue =
+  Promise.resolve();
+
+async function runPetIdentitySerialized(
+  task
+) {
+  let releaseQueue;
+
+  const currentTurn =
+    new Promise((resolve) => {
+      releaseQueue = resolve;
+    });
+
+  const previousTurn =
+    petIdentityQueue;
+
+  petIdentityQueue =
+    previousTurn
+      .catch(() => undefined)
+      .then(() => currentTurn);
+
+  await previousTurn.catch(
+    () => undefined
+  );
+
+  try {
+    return await task();
+  } finally {
+    releaseQueue();
+  }
+}
 
 const BACKEND_PUBLIC_URL = String(
   process.env.BACKEND_PUBLIC_URL ||
@@ -462,6 +504,7 @@ function distanceKm(lat1, lon1, lat2, lon2) {
 
   return EARTH_RADIUS * angularDistance;
 }
+
 // ==========================================
 // SCORE POR DISTANCIA
 // ==========================================
@@ -941,9 +984,6 @@ function calculateCandidate(
     colorSimilarity < 0.8;
 
   if (sameColor) {
-    // Antes +15.
-    // Ahora el color ayuda,
-    // pero no domina.
     score += 8;
 
     reasons.push(
@@ -972,7 +1012,7 @@ function calculateCandidate(
 
   // ==========================================
   // DISTANCIA
-  // ==========================================
+// ==========================================
 
   const distance =
     distanceKm(
@@ -1039,7 +1079,8 @@ function calculateCandidate(
         Math.round(score)
       )
     );
-      const lostPhoto =
+
+  const lostPhoto =
     getLostPhoto(
       lostReport
     );
@@ -1320,775 +1361,49 @@ function calculateCandidate(
 // ==========================================
 // COMPARACIÓN ANIMAL RE-ID LEGACY
 //
-// MegaDescriptor + DINOv2
-// Se mantiene sólo como fallback
-// diagnóstico.
+// IMPORTANTE:
+// Esta función se mantiene únicamente por
+// compatibilidad con tests/imports antiguos.
+// Production Lite NO la utiliza como fallback.
 // ==========================================
 
 async function addLegacyImageSimilarity(
   candidate
 ) {
-  const lostPhoto =
-    candidate?.lost?.photo;
+  candidate.imageSimilarity =
+    null;
 
-  const targetPhoto =
-    candidate?.target?.photo ||
-    candidate?.found?.photo ||
-    candidate?.sighting?.photo;
+  candidate.rawImageSimilarity =
+    null;
 
-  // ========================================
-  // SIN DOS FOTOS
-  // ========================================
+  candidate.megaSimilarity =
+    null;
 
-  if (
-    !lostPhoto ||
-    !targetPhoto
-  ) {
-    candidate.imageSimilarity =
-      null;
+  candidate.dinoSimilarity =
+    null;
 
-    candidate.rawImageSimilarity =
-      null;
-
-    candidate.megaSimilarity =
-      null;
-
-    candidate.dinoSimilarity =
-      null;
-
-    candidate.finalScore =
-      Math.min(
-        49,
-        Math.round(
-          candidate
-            .candidateScore *
-            0.65
-        )
-      );
-
-    candidate.hybridScore =
-      candidate.finalScore;
-
-    candidate.reasons.push(
-      "Comparación visual no disponible: faltan dos fotos"
-    );
-
-    candidate.reasons.push(
-      "Resultado preliminar de baja confianza"
-    );
-
-    return candidate;
-  }
-
-  try {
-    const isSighting =
-      candidate.targetType ===
-        "sighting" ||
-      Boolean(
-        candidate.sightingId
-      );
-
-    const targetEntityType =
-      isSighting
-        ? "sighting"
-        : "found_report";
-
-    const targetEntityId =
-      isSighting
-        ? candidate.sightingId
-        : candidate.foundReportId;
-
-    console.log(
-      "🧠 Comparando Re-ID híbrido legacy:",
-      {
-        perdida:
-          candidate
-            .lostReportId,
-
-        tipoDestino:
-          isSighting
-            ? "avistamiento"
-            : "encontrada",
-
-        destino:
-          targetEntityId,
-      }
-    );
-
-    const lostEmbeddings =
-      await getHybridEmbeddings(
-        {
-          entityType:
-            "lost_report",
-
-          entityId:
-            candidate
-              .lostReportId,
-
-          imageUrl:
-            lostPhoto,
-        }
-      );
-
-    const targetEmbeddings =
-      await getHybridEmbeddings(
-        {
-          entityType:
-            targetEntityType,
-
-          entityId:
-            targetEntityId,
-
-          imageUrl:
-            targetPhoto,
-        }
-      );
-
-    const lostMegaVector =
-      lostEmbeddings
-        ?.mega
-        ?.embedding;
-
-    const targetMegaVector =
-      targetEmbeddings
-        ?.mega
-        ?.embedding;
-
-    const lostDinoVector =
-      lostEmbeddings
-        ?.dino
-        ?.embedding;
-
-    const targetDinoVector =
-      targetEmbeddings
-        ?.dino
-        ?.embedding;
-
-    const megaSimilarity =
-      cosineSimilarity(
-        lostMegaVector,
-        targetMegaVector
-      );
-
-    const dinoSimilarity =
-      cosineSimilarity(
-        lostDinoVector,
-        targetDinoVector
-      );
-
-    if (
-      megaSimilarity ===
-        null &&
-      dinoSimilarity ===
-        null
-    ) {
-      throw new Error(
-        "No se pudo calcular ninguna similitud visual."
-      );
-    }
-
-    candidate.megaSimilarity =
-      megaSimilarity;
-
-    candidate.dinoSimilarity =
-      dinoSimilarity;
-
-    candidate.rawImageSimilarity =
-      megaSimilarity;
-
-    function normalizeMega(
-      value
-    ) {
-      if (
-        value === null ||
-        !Number.isFinite(
-          value
-        )
-      ) {
-        return 0;
-      }
-
-      if (value >= 0.60) {
-        return 100;
-      }
-
-      if (value >= 0.45) {
-        return 90;
-      }
-
-      if (value >= 0.35) {
-        return 80;
-      }
-
-      if (value >= 0.25) {
-        return 70;
-      }
-
-      if (value >= 0.18) {
-        return 60;
-      }
-
-      if (value >= 0.12) {
-        return 50;
-      }
-
-      if (value >= 0.08) {
-        return 40;
-      }
-
-      if (value >= 0.04) {
-        return 30;
-      }
-
-      if (value >= 0) {
-        return 20;
-      }
-
-      return 0;
-    }
-
-    function normalizeDino(
-      value
-    ) {
-      if (
-        value === null ||
-        !Number.isFinite(
-          value
-        )
-      ) {
-        return 0;
-      }
-
-      if (value >= 0.80) {
-        return 100;
-      }
-
-      if (value >= 0.70) {
-        return 95;
-      }
-
-      if (value >= 0.60) {
-        return 90;
-      }
-
-      if (value >= 0.55) {
-        return 85;
-      }
-
-      if (value >= 0.50) {
-        return 75;
-      }
-
-      if (value >= 0.45) {
-        return 65;
-      }
-
-      if (value >= 0.40) {
-        return 55;
-      }
-
-      if (value >= 0.35) {
-        return 45;
-      }
-
-      if (value >= 0.30) {
-        return 35;
-      }
-
-      if (value >= 0.20) {
-        return 20;
-      }
-
-      return 0;
-    }
-
-    const megaScore =
-      normalizeMega(
-        megaSimilarity
-      );
-
-    const dinoScore =
-      normalizeDino(
-        dinoSimilarity
-      );
-
-    const visualScore =
+  candidate.finalScore =
+    Math.min(
+      49,
       Math.round(
-        dinoScore *
-          0.75 +
-        megaScore *
-          0.25
-      );
-
-    candidate.imageSimilarity =
-      visualScore;
-
-    candidate.megaScore =
-      megaScore;
-
-    candidate.dinoScore =
-      dinoScore;
-
-    let finalScore =
-      Math.round(
-        visualScore *
-          0.75 +
         candidate
           .candidateScore *
-          0.25
-      );
-          // ========================================
-    // RAZAS ESPECÍFICAS INCOMPATIBLES
-    // ========================================
-
-    const bothSpecificBreed =
-      candidate
-        .compatibility
-        ?.bothSpecificBreed ===
-      true;
-
-    const breedConflict =
-      candidate
-        .compatibility
-        ?.breedConflict ===
-      true;
-
-    if (
-      bothSpecificBreed &&
-      breedConflict
-    ) {
-      candidate.finalScore =
-        0;
-
-      candidate.hybridScore =
-        0;
-
-      candidate.reasons.push(
-        "Razas específicas incompatibles"
-      );
-
-      console.log(
-        "❌ Descartado por raza:",
-        {
-          perdida:
-            candidate
-              .lost
-              ?.breed,
-
-          destino:
-            candidate
-              .target
-              ?.breed,
-
-          targetType:
-            candidate
-              .targetType,
-        }
-      );
-
-      return candidate;
-    }
-
-    // ========================================
-    // DINO MUY ALTO
-    // ========================================
-
-    if (
-      dinoSimilarity !==
-        null &&
-      dinoSimilarity >=
-        0.60
-    ) {
-      finalScore =
-        Math.max(
-          finalScore,
-          70
-        );
-
-      candidate.reasons.push(
-        "Similitud visual DINOv2 muy alta"
-      );
-    }
-
-    // ========================================
-    // DINO ALTO + DATOS COMPATIBLES
-    // ========================================
-
-    if (
-      dinoSimilarity !==
-        null &&
-      dinoSimilarity >=
-        0.55 &&
-      candidate
-        .candidateScore >=
-        45
-    ) {
-      finalScore += 5;
-
-      candidate.reasons.push(
-        "DINOv2 y datos físicos compatibles"
-      );
-    }
-
-    // ========================================
-    // DINO MODERADO
-    // ========================================
-
-    if (
-      dinoSimilarity !==
-        null &&
-      dinoSimilarity >=
-        0.45 &&
-      dinoSimilarity <
-        0.55
-    ) {
-      candidate.reasons.push(
-        "Similitud visual DINOv2 moderada"
-      );
-    }
-
-    // ========================================
-    // DINO BAJO
-    // ========================================
-
-    if (
-      dinoSimilarity !==
-        null &&
-      dinoSimilarity <
-        0.30
-    ) {
-      finalScore =
-        Math.min(
-          finalScore,
-          39
-        );
-
-      candidate.reasons.push(
-        "DINOv2 indica baja similitud visual"
-      );
-    }
-
-    // ========================================
-    // DINO MUY BAJO
-    // ========================================
-
-    if (
-      dinoSimilarity !==
-        null &&
-      dinoSimilarity <
-        0.20
-    ) {
-      finalScore =
-        Math.min(
-          finalScore,
-          30
-        );
-
-      candidate.reasons.push(
-        "DINOv2 indica similitud visual muy baja"
-      );
-    }
-
-    // ========================================
-    // SCORE VISUAL MUY BAJO
-    // ========================================
-
-    if (
-      visualScore < 30
-    ) {
-      finalScore =
-        Math.min(
-          finalScore,
-          35
-        );
-
-      candidate.reasons.push(
-        "La comparación visual no respalda la coincidencia"
-      );
-    }
-
-    // ========================================
-    // TAMAÑO DIFERENTE
-    // ========================================
-
-    if (
-      candidate
-        .compatibility
-        ?.sizeConflict
-    ) {
-      finalScore =
-        Math.min(
-          finalScore,
-          55
-        );
-
-      candidate.reasons.push(
-        "Penalización por tamaño diferente"
-      );
-    }
-
-    // ========================================
-    // COLOR DIFERENTE
-    // ========================================
-
-    if (
-      candidate
-        .compatibility
-        ?.colorConflict
-    ) {
-      finalScore =
-        Math.min(
-          finalScore,
-          50
-        );
-
-      candidate.reasons.push(
-        "Penalización por color diferente"
-      );
-    }
-
-    // ========================================
-    // GENÉRICA VS ESPECÍFICA
-    // ========================================
-
-    if (
-      candidate
-        .compatibility
-        ?.specificToGenericBreed
-    ) {
-      if (
-        visualScore < 60
-      ) {
-        finalScore =
-          Math.min(
-            finalScore,
-            49
-          );
-      }
-
-      candidate.reasons.push(
-        "Raza genérica frente a específica: se requiere apoyo visual"
-      );
-    }
-
-    // ========================================
-    // DISTANCIA
-    // ========================================
-
-    if (
-      candidate.distanceKm !==
-        null &&
-      candidate.distanceKm >
-        100
-    ) {
-      finalScore =
-        Math.min(
-          finalScore,
-          35
-        );
-
-      candidate.reasons.push(
-        "Distancia excesiva"
-      );
-    } else if (
-      candidate.distanceKm !==
-        null &&
-      candidate.distanceKm >
-        50
-    ) {
-      finalScore =
-        Math.min(
-          finalScore,
-          45
-        );
-
-      candidate.reasons.push(
-        "Ubicación lejana"
-      );
-    }
-
-    // ========================================
-    // AVISTAMIENTOS
-    // ========================================
-
-    if (
-      isSighting &&
-      visualScore >= 70
-    ) {
-      finalScore =
-        Math.max(
-          finalScore,
-          60
-        );
-
-      candidate.reasons.push(
-        "Avistamiento con similitud visual relevante"
-      );
-    }
-
-    // ========================================
-    // CLAMP FINAL
-    // ========================================
-
-    candidate.finalScore =
-      Math.max(
-        0,
-        Math.min(
-          100,
-          Math.round(
-            finalScore
-          )
-        )
-      );
-
-    candidate.hybridScore =
-      candidate.finalScore;
-
-    // ========================================
-    // EXPLICACIONES TÉCNICAS
-    // ========================================
-
-    if (
-      megaSimilarity !==
-      null
-    ) {
-      candidate.reasons.push(
-        `MegaDescriptor: ${megaSimilarity.toFixed(
-          4
-        )}`
-      );
-    }
-
-    if (
-      dinoSimilarity !==
-      null
-    ) {
-      candidate.reasons.push(
-        `DINOv2: ${dinoSimilarity.toFixed(
-          4
-        )}`
-      );
-    }
-
-    candidate.reasons.push(
-      `Score visual híbrido: ${visualScore}%`
+          0.65
+      )
     );
 
-    if (isSighting) {
-      candidate.reasons.push(
-        "Origen del candidato: avistamiento"
-      );
-    } else {
-      candidate.reasons.push(
-        "Origen del candidato: mascota encontrada"
-      );
-    }
+  candidate.hybridScore =
+    candidate.finalScore;
 
-    console.log(
-      "⚡ Resultado Re-ID híbrido:",
-      {
-        targetType:
-          candidate.targetType,
+  candidate.reasons.push(
+    "Fallback MegaDescriptor/DINOv2 desactivado en Production Lite"
+  );
 
-        megaSimilarity:
-          megaSimilarity ===
-          null
-            ? null
-            : Number(
-                megaSimilarity.toFixed(
-                  6
-                )
-              ),
-
-        dinoSimilarity:
-          dinoSimilarity ===
-          null
-            ? null
-            : Number(
-                dinoSimilarity.toFixed(
-                  6
-                )
-              ),
-
-        megaScore,
-
-        dinoScore,
-
-        dataScore:
-          candidate
-            .candidateScore,
-
-        visualScore,
-
-        hybridScore:
-          candidate
-            .finalScore,
-      }
-    );
-
-    return candidate;
-  } catch (error) {
-    console.error(
-      "❌ Comparación Re-ID híbrida falló:",
-      error.message
-    );
-
-    candidate.imageSimilarity =
-      null;
-
-    candidate.rawImageSimilarity =
-      null;
-
-    candidate.megaSimilarity =
-      null;
-
-    candidate.dinoSimilarity =
-      null;
-
-    // ======================================
-    // FALLBACK SEGURO
-    // ======================================
-
-    candidate.finalScore =
-      Math.min(
-        49,
-        Math.round(
-          candidate
-            .candidateScore *
-            0.65
-        )
-      );
-
-    candidate.hybridScore =
-      candidate.finalScore;
-
-    candidate.reasons.push(
-      "Animal Re-ID híbrido temporalmente no disponible"
-    );
-
-    candidate.reasons.push(
-      "Resultado preliminar: la comparación visual no pudo completarse"
-    );
-
-    return candidate;
-  }
+  return candidate;
 }
-
 
 // ==========================================
 // COMPARACIÓN PETIDENTITY - MOTOR PRINCIPAL
-//
-// Paso 25
-//
-// Orden:
-// 1. PetIdentity /compare
-// 2. PetIdentity decide identidad
-// 3. Consensus Python + datos acompañan
-// 4. Mega/DINO legacy sólo son fallback
-//
-// Regla crítica:
-// - different_identity + crop dual => descartar
-// - sin crop dual => nunca auto-confirmar
 // ==========================================
 
 async function addImageSimilarity(
@@ -2167,12 +1482,16 @@ async function addImageSimilarity(
   try {
     // ======================================
     // LLAMADA REAL AL SERVICIO PYTHON
+    // SERIALIZADA: UNA POR VEZ
     // ======================================
 
     const result =
-      await compareWithPetIdentity(
-        lostPhoto,
-        targetPhoto
+      await runPetIdentitySerialized(
+        () =>
+          compareWithPetIdentity(
+            lostPhoto,
+            targetPhoto
+          )
       );
 
     const petRaw =
@@ -2300,22 +1619,11 @@ async function addImageSimilarity(
         ?.consensusReason ||
       null;
 
-    // Mantener estas señales visibles
-    // para diagnóstico.
-
     candidate.megaSimilarity =
-      asFiniteNumber(
-        result
-          ?.megaSimilarity,
-        null
-      );
+      null;
 
     candidate.dinoSimilarity =
-      asFiniteNumber(
-        result
-          ?.dinoSimilarity,
-        null
-      );
+      null;
 
     candidate.visualVerificationScore =
       asFiniteNumber(
@@ -2351,13 +1659,14 @@ async function addImageSimilarity(
           .candidateScore *
           0.10
       );
-          // ======================================
-    // SIN CROP DUAL
-    //
-    // No permitimos persistir un match
-    // automático. Ya vimos que el fondo
-    // puede inflar similitudes.
+
     // ======================================
+    // SIN CROP DUAL
+//
+// No permitimos persistir un match
+// automático. Ya vimos que el fondo
+// puede inflar similitudes.
+// ======================================
 
     if (!dualCrop) {
       finalScore =
@@ -2640,11 +1949,12 @@ async function addImageSimilarity(
     return candidate;
   } catch (error) {
     // ======================================
-    // FALLBACK LEGACY
+    // PETIDENTITY NO DISPONIBLE
     //
-    // MegaDescriptor/DINO siguen disponibles
-    // para diagnóstico, pero NO pueden crear
-    // un match automático sin PetIdentity.
+    // Production Lite usa PetIdentity como
+    // único motor visual.
+    //
+    // NO llamamos MegaDescriptor/DINOv2.
     // ======================================
 
     console.error(
@@ -2652,64 +1962,57 @@ async function addImageSimilarity(
       error.message
     );
 
+    candidate.petIdentityVerdict =
+      null;
+
+    candidate.petIdentitySimilarity =
+      null;
+
+    candidate.petIdentityScore =
+      null;
+
+    candidate.petIdentityEffectiveScore =
+      null;
+
+    candidate.petIdentityReliability =
+      null;
+
+    candidate.imageSimilarity =
+      null;
+
+    candidate.rawImageSimilarity =
+      null;
+
+    candidate.megaSimilarity =
+      null;
+
+    candidate.dinoSimilarity =
+      null;
+
+    // Sin comparación visual válida no
+    // persistimos una coincidencia automática.
+    candidate.finalScore =
+      Math.min(
+        49,
+        Math.round(
+          candidate
+            .candidateScore *
+            0.65
+        )
+      );
+
+    candidate.hybridScore =
+      candidate.finalScore;
+
     candidate.reasons.push(
       "PetIdentity temporalmente no disponible"
     );
 
-    try {
-      candidate =
-        await addLegacyImageSimilarity(
-          candidate
-        );
+    candidate.reasons.push(
+      "Resultado preliminar: no se ejecuta fallback legacy en Production Lite"
+    );
 
-      // El fallback no puede pasar el
-      // umbral de persistencia.
-      candidate.finalScore =
-        Math.min(
-          49,
-          candidate.finalScore ??
-            49
-        );
-
-      candidate.hybridScore =
-        candidate.finalScore;
-
-      candidate.reasons.push(
-        "MegaDescriptor/DINO usados sólo como respaldo diagnóstico"
-      );
-
-      candidate.reasons.push(
-        "Resultado preliminar: requiere PetIdentity para confirmar"
-      );
-
-      return candidate;
-    } catch (
-      legacyError
-    ) {
-      console.error(
-        "❌ Fallback Re-ID también falló:",
-        legacyError.message
-      );
-
-      candidate.finalScore =
-        Math.min(
-          49,
-          Math.round(
-            candidate
-              .candidateScore *
-              0.65
-          )
-        );
-
-      candidate.hybridScore =
-        candidate.finalScore;
-
-      candidate.reasons.push(
-        "No fue posible completar la comparación visual"
-      );
-
-      return candidate;
-    }
+    return candidate;
   }
 }
 
@@ -2798,6 +2101,7 @@ function buildMatchCreateData(
       null,
   };
 }
+
 // ==========================================
 // PERSISTENCIA
 // ==========================================
@@ -2992,7 +2296,6 @@ function hasHardBreedConflict(
       true
   );
 }
-
 // ==========================================
 // PROCESAR UN CANDIDATO
 // ==========================================
@@ -3064,12 +2367,11 @@ async function processCandidate(
   // Solo persistimos una coincidencia
   // si alcanza 55.
   //
-  // Paso 25:
   // - strong_identity_match >= 75
   // - possible_identity_match >= 55
   // - different_identity = 0
   // - sin crop dual <= 54
-  // - fallback legacy <= 49
+  // - sin PetIdentity válido <= 49
   // ========================================
 
   if (
@@ -3277,7 +2579,6 @@ async function generateCandidates() {
           "sightedAt",
           "DESC",
         ],
-
         [
           "created_at",
           "DESC",
@@ -3373,7 +2674,7 @@ async function generateCandidates() {
 
   // ========================================
   // ORDENAR MEJORES PRIMERO
-  // ========================================
+// ========================================
 
   candidates.sort(
     (
@@ -3471,6 +2772,7 @@ module.exports = {
   addImageSimilarity,
   addLegacyImageSimilarity,
   compareWithPetIdentity,
+  runPetIdentitySerialized,
   resolveImageUrlForReId,
 
   persistCandidate,
