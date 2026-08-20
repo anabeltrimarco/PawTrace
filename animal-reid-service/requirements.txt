@@ -13,3 +13,7 @@ librosa
 setuptools==80.10.2
 scikit-image
 opencv-python-headless
+transformers
+huggingface-hub
+torch
+torchvision
