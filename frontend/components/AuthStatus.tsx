@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 
 type Usuario = {
   id: string;
@@ -22,14 +22,13 @@ const RAW_API_URL = (
   "http://localhost:5000/api"
 ).replace(/\/$/, "");
 
-const API_URL =
-  RAW_API_URL.endsWith("/api")
-    ? RAW_API_URL
-    : `${RAW_API_URL}/api`;
+const API_URL = RAW_API_URL.endsWith("/api")
+  ? RAW_API_URL
+  : `${RAW_API_URL}/api`;
 
-  export default function AuthStatus() {
-  
+export default function AuthStatus() {
   const router = useRouter();
+  const pathname = usePathname();
 
   const [usuario, setUsuario] =
     useState<Usuario | null>(null);
@@ -38,148 +37,127 @@ const API_URL =
     useState(true);
 
   // ==========================================
-  // CARGAR USUARIO LOGUEADO
+  // CARGAR USUARIO ACTUAL
   // ==========================================
 
-  useEffect(() => {
-    let activo = true;
+  const cargarUsuario = useCallback(async () => {
+    try {
+      const token =
+        localStorage.getItem("token");
 
-    async function cargarUsuario() {
-      try {
-        const token =
-          localStorage.getItem("token");
-
-        if (!token) {
-          if (activo) {
-            setUsuario(null);
-            setCargando(false);
-          }
-
-          return;
-        }
-
-        const response = await fetch(
-          `${API_URL}/auth/perfil`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-            cache: "no-store",
-          }
-        );
-
-        if (!response.ok) {
-          if (
-            response.status === 401 ||
-            response.status === 403
-          ) {
-            localStorage.removeItem("token");
-          }
-
-          if (activo) {
-            setUsuario(null);
-          }
-
-          return;
-        }
-
-        const data: PerfilResponse =
-          await response.json();
-
-        if (activo) {
-          setUsuario(data.usuario);
-        }
-      } catch (error) {
-        console.error(
-          "Error cargando usuario:",
-          error
-        );
-
-        if (activo) {
-          setUsuario(null);
-        }
-      } finally {
-        if (activo) {
-          setCargando(false);
-        }
-      }
-    }
-
-    // Carga inicial
-    cargarUsuario();
-
-    // ==========================================
-    // LOGIN / LOGOUT CAMBIÓ
-    // ==========================================
-
-    function handleAuthChanged() {
-      if (!activo) {
+      if (!token) {
+        setUsuario(null);
+        setCargando(false);
         return;
       }
 
       setCargando(true);
+
+      const response = await fetch(
+        `${API_URL}/auth/perfil`,
+        {
+          method: "GET",
+
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+
+          cache: "no-store",
+        }
+      );
+
+      if (!response.ok) {
+        if (
+          response.status === 401 ||
+          response.status === 403
+        ) {
+          localStorage.removeItem("token");
+        }
+
+        setUsuario(null);
+        return;
+      }
+
+      const data: PerfilResponse =
+        await response.json();
+
+      setUsuario(data.usuario);
+    } catch (error) {
+      console.error(
+        "Error cargando usuario:",
+        error
+      );
+
+      setUsuario(null);
+    } finally {
+      setCargando(false);
+    }
+  }, []);
+
+  // ==========================================
+  // CARGA INICIAL + CAMBIO DE RUTA
+  // ==========================================
+
+  useEffect(() => {
+    cargarUsuario();
+  }, [pathname, cargarUsuario]);
+
+  // ==========================================
+  // EVENTOS DE AUTENTICACIÓN
+  // ==========================================
+
+  useEffect(() => {
+    function handleAuthChanged() {
       cargarUsuario();
     }
-
-    // ==========================================
-    // PERFIL CAMBIÓ
-    // ==========================================
 
     function handlePerfilActualizado(
       event: Event
     ) {
-      if (!activo) {
-        return;
-      }
-
       const customEvent =
         event as CustomEvent<Usuario>;
 
       if (customEvent.detail) {
-        setUsuario(
-          customEvent.detail
-        );
-
+        setUsuario(customEvent.detail);
         setCargando(false);
-
-        return;
+      } else {
+        cargarUsuario();
       }
+    }
 
+    function handleStorage(
+      event: StorageEvent
+    ) {
+      if (event.key === "token") {
+        cargarUsuario();
+      }
+    }
+
+    function handleFocus() {
       cargarUsuario();
     }
 
-    // Escuchamos cambios de sesión.
     window.addEventListener(
       "auth-changed",
       handleAuthChanged
     );
 
-    // Escuchamos cambios de perfil/avatar.
     window.addEventListener(
       "pawtrace:perfil-actualizado",
       handlePerfilActualizado
     );
-
-    // También reaccionamos si el token cambia
-    // desde otra pestaña del navegador.
-    function handleStorage(
-      event: StorageEvent
-    ) {
-      if (
-        event.key === "token"
-      ) {
-        handleAuthChanged();
-      }
-    }
 
     window.addEventListener(
       "storage",
       handleStorage
     );
 
-    return () => {
-      activo = false;
+    window.addEventListener(
+      "focus",
+      handleFocus
+    );
 
+    return () => {
       window.removeEventListener(
         "auth-changed",
         handleAuthChanged
@@ -194,27 +172,28 @@ const API_URL =
         "storage",
         handleStorage
       );
+
+      window.removeEventListener(
+        "focus",
+        handleFocus
+      );
     };
-  }, []);
+  }, [cargarUsuario]);
 
   // ==========================================
   // CERRAR SESIÓN
   // ==========================================
 
   function cerrarSesion() {
-    localStorage.removeItem(
-      "token"
-    );
+    localStorage.removeItem("token");
 
     setUsuario(null);
 
-    // Avisamos al resto de la app.
     window.dispatchEvent(
       new Event("auth-changed")
     );
 
     router.push("/");
-
     router.refresh();
   }
 
@@ -227,7 +206,7 @@ const API_URL =
   }
 
   // ==========================================
-  // USUARIO NO LOGUEADO
+  // NO LOGUEADO
   // ==========================================
 
   if (!usuario) {
@@ -274,7 +253,7 @@ const API_URL =
   }
 
   // ==========================================
-  // USUARIO LOGUEADO
+  // LOGUEADO
   // ==========================================
 
   return (
@@ -287,8 +266,6 @@ const API_URL =
         flexWrap: "wrap",
       }}
     >
-      {/* USUARIO */}
-
       <span
         style={{
           display: "inline-flex",
@@ -327,8 +304,6 @@ const API_URL =
         </span>
       </span>
 
-      {/* MI PERFIL */}
-
       <Link
         href="/perfil"
         style={{
@@ -342,8 +317,6 @@ const API_URL =
         Mi perfil
       </Link>
 
-      {/* MIS REPORTES */}
-
       <Link
         href="/mis-reportes"
         style={{
@@ -356,8 +329,6 @@ const API_URL =
       >
         🐾 Mis reportes
       </Link>
-
-      {/* CERRAR SESIÓN */}
 
       <button
         type="button"
