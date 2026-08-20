@@ -19,7 +19,7 @@ MIN_IMAGE_SIDE_FOR_CROP = int(os.getenv("MIN_IMAGE_SIDE_FOR_CROP", "160"))
 REQUEST_TIMEOUT_SECONDS = int(os.getenv("IMAGE_REQUEST_TIMEOUT", "30"))
 
 try:
-    torch.set_num_threads(max(1, min(int(os.getenv("TORCH_NUM_THREADS", "2")), 4)))
+    torch.set_num_threads(max(1, min(int(os.getenv("TORCH_NUM_THREADS", "1")), 2)))
 except Exception:
     pass
 
@@ -30,6 +30,7 @@ app = FastAPI(
 )
 
 _model_lock = Lock()
+_inference_lock = Lock()
 _pet_id_processor = None
 _pet_id_model = None
 
@@ -208,20 +209,41 @@ def health():
 
 @app.post("/embed")
 def embed(payload: EmbedRequest):
-    original = load_image(payload.image)
-    identity_image, cropped = make_light_identity_crop(original)
-    embedding = get_pet_identity_embedding(identity_image)
-    embedding_list = embedding.float().tolist()
-    return {
-        "embedding": embedding_list,
-        "embeddingSize": len(embedding_list),
-        "model": PET_ID_MODEL_NAME,
-        "detector": "light-center-crop",
-        "device": DEVICE,
-        "cropped": cropped,
-        "detectionConfidence": None,
-        "processingMode": "production-lite-center-crop" if cropped else "production-lite-original",
-    }
+    # Serializamos la inferencia para evitar picos de RAM cuando Railway
+    # recibe varias solicitudes al mismo tiempo.
+    with _inference_lock:
+        original = None
+        identity_image = None
+        embedding = None
+
+        try:
+            original = load_image(payload.image)
+            identity_image, cropped = make_light_identity_crop(original)
+            embedding = get_pet_identity_embedding(identity_image)
+            embedding_list = embedding.float().tolist()
+
+            return {
+                "embedding": embedding_list,
+                "embeddingSize": len(embedding_list),
+                "model": PET_ID_MODEL_NAME,
+                "detector": "light-center-crop",
+                "device": DEVICE,
+                "cropped": cropped,
+                "detectionConfidence": None,
+                "processingMode": (
+                    "production-lite-center-crop"
+                    if cropped
+                    else "production-lite-original"
+                ),
+            }
+        finally:
+            del embedding
+            del identity_image
+            del original
+            gc.collect()
+
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
 
 @app.post("/compare")
@@ -231,104 +253,110 @@ def compare(payload: CompareRequest):
     print("A:", payload.imageA, flush=True)
     print("B:", payload.imageB, flush=True)
 
-    original_a = load_image(payload.imageA)
-    original_b = load_image(payload.imageB)
-    image_a, crop_a = make_light_identity_crop(original_a)
-    image_b, crop_b = make_light_identity_crop(original_b)
+    # FastAPI puede ejecutar varias solicitudes sync en paralelo.
+    # Este lock evita picos de RAM que terminan el contenedor con "Killed".
+    with _inference_lock:
+        original_a = None
+        original_b = None
+        image_a = None
+        image_b = None
+        embedding_a = None
+        embedding_b = None
 
-    try:
-        embedding_a = get_pet_identity_embedding(image_a)
-        embedding_b = get_pet_identity_embedding(image_b)
+        try:
+            original_a = load_image(payload.imageA)
+            original_b = load_image(payload.imageB)
+            image_a, crop_a = make_light_identity_crop(original_a)
+            image_b, crop_b = make_light_identity_crop(original_b)
 
-        raw_similarity = float(torch.dot(embedding_a, embedding_b).item())
-        calibrated_score = clamp01(calibrate_pet_identity_similarity(raw_similarity))
-        reliability = get_reliability(crop_a, crop_b)
-        effective_score = clamp01(calibrated_score * reliability)
-        verdict = pet_identity_verdict(raw_similarity, effective_score, crop_a, crop_b)
+            embedding_a = get_pet_identity_embedding(image_a)
+            embedding_b = get_pet_identity_embedding(image_b)
 
-        # Production Lite usa PetIdentity como único motor.
-        consensus_score = effective_score
-        consensus_percentage = round(consensus_score * 100)
-        c_verdict = consensus_verdict(consensus_score)
-        embedding_size = int(embedding_a.shape[0])
+            raw_similarity = float(torch.dot(embedding_a, embedding_b).item())
+            calibrated_score = clamp01(calibrate_pet_identity_similarity(raw_similarity))
+            reliability = get_reliability(crop_a, crop_b)
+            effective_score = clamp01(calibrated_score * reliability)
+            verdict = pet_identity_verdict(raw_similarity, effective_score, crop_a, crop_b)
 
-        print(
-            "🪪 Resultado PetIdentity:",
-            {
-                "rawSimilarity": round(raw_similarity, 6),
-                "calibratedScore": round(calibrated_score, 6),
-                "reliability": round(reliability, 6),
-                "effectiveScore": round(effective_score, 6),
-                "verdict": verdict,
+            consensus_score = effective_score
+            consensus_percentage = round(consensus_score * 100)
+            c_verdict = consensus_verdict(consensus_score)
+            embedding_size = int(embedding_a.shape[0])
+
+            print(
+                "🪪 Resultado PetIdentity:",
+                {
+                    "rawSimilarity": round(raw_similarity, 6),
+                    "calibratedScore": round(calibrated_score, 6),
+                    "reliability": round(reliability, 6),
+                    "effectiveScore": round(effective_score, 6),
+                    "verdict": verdict,
+                    "cropA": crop_a,
+                    "cropB": crop_b,
+                    "embeddingSize": embedding_size,
+                },
+                flush=True,
+            )
+
+            return {
+                "similarity": round(raw_similarity, 6),
+                "percentage": consensus_percentage,
+                "model": PET_ID_MODEL_NAME,
+                "detector": "light-center-crop",
+                "device": DEVICE,
+                "embeddingSize": embedding_size,
                 "cropA": crop_a,
                 "cropB": crop_b,
-                "embeddingSize": embedding_size,
-            },
-            flush=True,
-        )
+                "detectionConfidenceA": None,
+                "detectionConfidenceB": None,
+                "processingMode": "production-lite",
+                "megaSimilarity": 0.0,
+                "dinoSimilarity": 0.0,
+                "megaEmbeddingSize": 0,
+                "dinoEmbeddingSize": 0,
+                "dinoModel": "disabled-production-lite",
+                "megaScore": 0.0,
+                "dinoScore": 0.0,
+                "visualScore": 0.0,
+                "visualPercentage": 0,
+                "visualVerdict": "disabled",
+                "consensusScore": round(consensus_score, 6),
+                "consensusPercentage": consensus_percentage,
+                "consensusVerdict": c_verdict,
+                "consensusReason": "Production Lite: PetIdentity especializado como único motor",
+                "petIdentityEnabled": True,
+                "petIdentityModel": PET_ID_MODEL_NAME,
+                "petIdentitySimilarity": round(raw_similarity, 6),
+                "petIdentityScore": round(calibrated_score, 6),
+                "petIdentityPercentage": round(calibrated_score * 100),
+                "petIdentityEmbeddingSize": embedding_size,
+                "petIdentityCropA": crop_a,
+                "petIdentityCropB": crop_b,
+                "petIdentityReliability": round(reliability, 6),
+                "petIdentityEffectiveScore": round(effective_score, 6),
+                "petIdentityEffectivePercentage": round(effective_score * 100),
+                "petIdentityVerdict": verdict,
+                "primaryEngine": "PetIdentity",
+                "primaryEngineScore": round(effective_score, 6),
+                "productionLite": True,
+                "cropStrategy": "center-90-percent" if crop_a and crop_b else "original-fallback",
+            }
 
-        return {
-            "similarity": round(raw_similarity, 6),
-            "percentage": consensus_percentage,
-            "model": PET_ID_MODEL_NAME,
-            "detector": "light-center-crop",
-            "device": DEVICE,
-            "embeddingSize": embedding_size,
-            "cropA": crop_a,
-            "cropB": crop_b,
-            "detectionConfidenceA": None,
-            "detectionConfidenceB": None,
-            "processingMode": "production-lite",
-
-            "megaSimilarity": 0.0,
-            "dinoSimilarity": 0.0,
-            "megaEmbeddingSize": 0,
-            "dinoEmbeddingSize": 0,
-            "dinoModel": "disabled-production-lite",
-            "megaScore": 0.0,
-            "dinoScore": 0.0,
-            "visualScore": 0.0,
-            "visualPercentage": 0,
-            "visualVerdict": "disabled",
-
-            "consensusScore": round(consensus_score, 6),
-            "consensusPercentage": consensus_percentage,
-            "consensusVerdict": c_verdict,
-            "consensusReason": "Production Lite: PetIdentity especializado como único motor",
-
-            "petIdentityEnabled": True,
-            "petIdentityModel": PET_ID_MODEL_NAME,
-            "petIdentitySimilarity": round(raw_similarity, 6),
-            "petIdentityScore": round(calibrated_score, 6),
-            "petIdentityPercentage": round(calibrated_score * 100),
-            "petIdentityEmbeddingSize": embedding_size,
-            "petIdentityCropA": crop_a,
-            "petIdentityCropB": crop_b,
-            "petIdentityReliability": round(reliability, 6),
-            "petIdentityEffectiveScore": round(effective_score, 6),
-            "petIdentityEffectivePercentage": round(effective_score * 100),
-            "petIdentityVerdict": verdict,
-
-            "primaryEngine": "PetIdentity",
-            "primaryEngineScore": round(effective_score, 6),
-
-            "productionLite": True,
-            "cropStrategy": "center-90-percent" if crop_a and crop_b else "original-fallback",
-        }
-
-    except HTTPException:
-        raise
-    except Exception as error:
-        print("❌ Error PetIdentity Production Lite:", repr(error), flush=True)
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error ejecutando PetIdentity: {str(error)}",
-        )
-    finally:
-        try:
-            del original_a, original_b, image_a, image_b
-        except Exception:
-            pass
-        gc.collect()
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
+        except HTTPException:
+            raise
+        except Exception as error:
+            print("❌ Error PetIdentity Production Lite:", repr(error), flush=True)
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error ejecutando PetIdentity: {str(error)}",
+            )
+        finally:
+            del embedding_a
+            del embedding_b
+            del image_a
+            del image_b
+            del original_a
+            del original_b
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
