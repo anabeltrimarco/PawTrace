@@ -15,5 +15,3 @@ scikit-image
 opencv-python-headless
 transformers
 huggingface-hub
-torch
-torchvision
