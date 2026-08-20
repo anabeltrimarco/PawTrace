@@ -1,0 +1,11 @@
+﻿image_a,image_b,identity_a,identity_b,expected_same,pet_similarity,pet_score,pet_effective_score,pet_reliability,pet_verdict,crop_a,crop_b,consensus_score,consensus_percentage,consensus_verdict,predicted_same,correct,request_seconds,error
+rita,rita2,rita,rita,True,0.823946,0.885919,0.885919,1.0,strong_identity_match,True,True,0.82,82,strong,True,True,96.343,
+rita,rita3,rita,rita,True,0.724629,0.704999,0.704999,1.0,possible_identity_match,True,True,0.6,60,possible,True,True,75.941,
+rita,perro1,rita,perro1,False,0.314638,0.0,0.0,1.0,different_identity,True,True,0.033391,3,weak,False,True,77.69,
+rita,perro2,rita,perro2,False,0.158201,0.0,0.0,1.0,different_identity,True,True,0.03016,3,weak,False,True,78.404,
+rita2,rita3,rita,rita,True,0.835925,0.903887,0.903887,1.0,strong_identity_match,True,True,0.82,82,strong,True,True,72.361,
+rita2,perro1,rita,perro1,False,0.355637,0.009396,0.009396,1.0,different_identity,True,True,0.041862,4,weak,False,True,72.447,
+rita2,perro2,rita,perro2,False,0.152568,0.0,0.0,1.0,different_identity,True,True,0.033428,3,weak,False,True,72.284,
+rita3,perro1,rita,perro1,False,0.326461,0.0,0.0,1.0,different_identity,True,True,0.032337,3,weak,False,True,73.296,
+rita3,perro2,rita,perro2,False,0.040536,0.0,0.0,1.0,different_identity,True,True,0.030728,3,weak,False,True,76.816,
+perro1,perro2,perro1,perro2,False,0.259762,0.0,0.0,1.0,different_identity,True,True,0.049858,5,weak,False,True,83.46,

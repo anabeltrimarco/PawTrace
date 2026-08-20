@@ -155,6 +155,17 @@ export default function MatchesPage() {
     setLoading,
   ] = useState(true);
 
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
+
+  const loadingMessages = [
+    "Analizando las fotografías...",
+    "Identificando características visuales...",
+    "Comparando patrones de identidad...",
+    "Buscando posibles coincidencias...",
+  ];
+
   const [
     error,
     setError,
@@ -239,6 +250,30 @@ export default function MatchesPage() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!loading) {
+      setElapsedSeconds(0);
+      setLoadingMessageIndex(0);
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setElapsedSeconds((current) => current + 1);
+    }, 1000);
+
+    const messageTimer = window.setInterval(() => {
+      setLoadingMessageIndex(
+        (current) =>
+          (current + 1) % loadingMessages.length
+      );
+    }, 3500);
+
+    return () => {
+      window.clearInterval(timer);
+      window.clearInterval(messageTimer);
+    };
+  }, [loading]);
 
   // ========================================
   // CAMBIAR ESTADO DEL MATCH
@@ -330,6 +365,15 @@ export default function MatchesPage() {
   // UI
   // ========================================
 
+  function formatElapsedTime(seconds: number) {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+
+    return `${String(minutes).padStart(2, "0")}:${String(
+      remainingSeconds
+    ).padStart(2, "0")}`;
+  }
+
   return (
     <main className="container form-page">
       <Link href="/">
@@ -357,25 +401,74 @@ export default function MatchesPage() {
         <div
           className="card"
           style={{
-            padding:
-              "24px",
-
-            marginTop:
-              "28px",
+            padding: "32px 24px",
+            marginTop: "28px",
+            textAlign: "center",
           }}
         >
-          <strong>
-            🤖 Analizando coincidencias...
-          </strong>
+          <div
+            style={{
+              width: "46px",
+              height: "46px",
+              border: "4px solid #dbe7e4",
+              borderTopColor: "#007f73",
+              borderRadius: "50%",
+              margin: "0 auto 20px",
+              animation: "pawtraceSpin 0.9s linear infinite",
+            }}
+          />
+
+          <h3
+            style={{
+              margin: "0 0 10px",
+              fontSize: "20px",
+            }}
+          >
+            🐾 PawTrace AI está analizando las imágenes
+          </h3>
 
           <p
             style={{
-              marginBottom: 0,
+              margin: 0,
+              color: "#536b67",
+              fontWeight: 600,
             }}
           >
-            Estamos comparando datos,
-            ubicación y fotografías.
+            {loadingMessages[loadingMessageIndex]}
           </p>
+
+          <div
+            style={{
+              marginTop: "18px",
+              fontSize: "14px",
+              color: "#64748b",
+            }}
+          >
+            Tiempo transcurrido:{" "}
+            <strong>{formatElapsedTime(elapsedSeconds)}</strong>
+          </div>
+
+          <p
+            style={{
+              margin: "12px 0 0",
+              fontSize: "13px",
+              color: "#94a3b8",
+            }}
+          >
+            Este análisis puede tardar unos segundos. No cierres esta ventana.
+          </p>
+
+          <style jsx>{`
+            @keyframes pawtraceSpin {
+              from {
+                transform: rotate(0deg);
+              }
+
+              to {
+                transform: rotate(360deg);
+              }
+            }
+          `}</style>
         </div>
       )}
 

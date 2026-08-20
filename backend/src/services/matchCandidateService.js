@@ -8,9 +8,9 @@
 // Incluye:
 // - Datos físicos
 // - Distancia
-// - Animal Re-ID
-// - MegaDescriptor
-// - DINOv2
+// - PetIdentity Fine-grained Re-ID (motor principal)
+// - Consensus Python /compare
+// - MegaDescriptor + DINOv2 (respaldo)
 // - Persistencia
 // - Matching por raza
 // ==========================================
@@ -31,6 +31,243 @@ const {
   getHybridEmbeddings,
   cosineSimilarity,
 } = require("./imageEmbeddingService");
+
+// ==========================================
+// PETIDENTITY / ANIMAL RE-ID SERVICE
+//
+// Local:
+//   http://127.0.0.1:8001
+//
+// Producción:
+//   configurar ANIMAL_REID_URL con la URL
+//   pública/interna del microservicio Python.
+// ==========================================
+
+const ANIMAL_REID_URL = String(
+  process.env.ANIMAL_REID_URL ||
+    "http://127.0.0.1:8001"
+).replace(/\/+$/, "");
+
+const ANIMAL_REID_TIMEOUT_MS = Number(
+  process.env.ANIMAL_REID_TIMEOUT_MS ||
+    120000
+);
+
+const BACKEND_PUBLIC_URL = String(
+  process.env.BACKEND_PUBLIC_URL ||
+    process.env.API_PUBLIC_URL ||
+    process.env.PUBLIC_API_URL ||
+    "http://127.0.0.1:4000"
+).replace(/\/+$/, "");
+
+// ==========================================
+// NORMALIZAR URL DE FOTO PARA PYTHON
+// ==========================================
+
+function resolveImageUrlForReId(
+  imageUrl
+) {
+  const value = String(
+    imageUrl || ""
+  ).trim();
+
+  if (!value) {
+    return null;
+  }
+
+  if (
+    /^https?:\/\//i.test(value)
+  ) {
+    return value;
+  }
+
+  if (
+    value.startsWith("/")
+  ) {
+    return `${BACKEND_PUBLIC_URL}${value}`;
+  }
+
+  return `${BACKEND_PUBLIC_URL}/${value}`;
+}
+
+// ==========================================
+// LLAMAR POST /compare DEL SERVICIO PYTHON
+// ==========================================
+
+async function compareWithPetIdentity(
+  imageA,
+  imageB
+) {
+  const resolvedA =
+    resolveImageUrlForReId(
+      imageA
+    );
+
+  const resolvedB =
+    resolveImageUrlForReId(
+      imageB
+    );
+
+  if (
+    !resolvedA ||
+    !resolvedB
+  ) {
+    throw new Error(
+      "PetIdentity requiere dos URLs de imagen."
+    );
+  }
+
+  if (
+    typeof fetch !== "function"
+  ) {
+    throw new Error(
+      "La versión de Node.js no dispone de fetch global."
+    );
+  }
+
+  const controller =
+    new AbortController();
+
+  const timeout = setTimeout(
+    () => controller.abort(),
+    ANIMAL_REID_TIMEOUT_MS
+  );
+
+  try {
+    console.log(
+      "🪪 Consultando PetIdentity:",
+      {
+        imageA: resolvedA,
+        imageB: resolvedB,
+        service:
+          `${ANIMAL_REID_URL}/compare`,
+      }
+    );
+
+    const response =
+      await fetch(
+        `${ANIMAL_REID_URL}/compare`,
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+
+          body: JSON.stringify({
+            imageA: resolvedA,
+            imageB: resolvedB,
+          }),
+
+          signal:
+            controller.signal,
+        }
+      );
+
+    const rawBody =
+      await response.text();
+
+    let data = null;
+
+    try {
+      data = rawBody
+        ? JSON.parse(rawBody)
+        : null;
+    } catch {
+      throw new Error(
+        `Animal Re-ID devolvió una respuesta no JSON (HTTP ${response.status}).`
+      );
+    }
+
+    if (!response.ok) {
+      const detail =
+        data?.detail ||
+        data?.message ||
+        `HTTP ${response.status}`;
+
+      throw new Error(
+        `Animal Re-ID /compare falló: ${
+          typeof detail === "string"
+            ? detail
+            : JSON.stringify(detail)
+        }`
+      );
+    }
+
+    return {
+      ...data,
+
+      _resolvedImageA:
+        resolvedA,
+
+      _resolvedImageB:
+        resolvedB,
+    };
+  } catch (error) {
+    if (
+      error?.name ===
+      "AbortError"
+    ) {
+      throw new Error(
+        `Animal Re-ID excedió ${ANIMAL_REID_TIMEOUT_MS} ms.`
+      );
+    }
+
+    throw error;
+  } finally {
+    clearTimeout(
+      timeout
+    );
+  }
+}
+
+// ==========================================
+// HELPERS DE PETIDENTITY
+// ==========================================
+
+function asFiniteNumber(
+  value,
+  fallback = null
+) {
+  const number =
+    Number(value);
+
+  return Number.isFinite(
+    number
+  )
+    ? number
+    : fallback;
+}
+
+function clampScore(
+  value
+) {
+  return Math.max(
+    0,
+    Math.min(
+      100,
+      Math.round(
+        Number(value) || 0
+      )
+    )
+  );
+}
+
+function petIdentityPercent(
+  value
+) {
+  const normalized =
+    asFiniteNumber(
+      value,
+      0
+    );
+
+  // Los scores del servicio Python son 0..1.
+  return clampScore(
+    normalized * 100
+  );
+}
 
 // ==========================================
 // NORMALIZAR TEXTO
@@ -225,7 +462,6 @@ function distanceKm(lat1, lon1, lat2, lon2) {
 
   return EARTH_RADIUS * angularDistance;
 }
-
 // ==========================================
 // SCORE POR DISTANCIA
 // ==========================================
@@ -474,7 +710,9 @@ function calculateCandidate(
     return null;
   }
 
+  // ==========================================
   // ESPECIE
+  // ==========================================
 
   const lostSpecies =
     normalizeText(
@@ -494,7 +732,8 @@ function calculateCandidate(
   ) {
     return null;
   }
-    // ==========================================
+
+  // ==========================================
   // RAZA
   // ==========================================
 
@@ -800,8 +1039,7 @@ function calculateCandidate(
         Math.round(score)
       )
     );
-
-  const lostPhoto =
+      const lostPhoto =
     getLostPhoto(
       lostReport
     );
@@ -835,9 +1073,6 @@ function calculateCandidate(
     rawImageSimilarity:
       null,
 
-    // IMPORTANTE:
-    // todavía no consideramos este
-    // score como resultado final.
     finalScore:
       candidateScore,
 
@@ -1083,10 +1318,14 @@ function calculateCandidate(
 }
 
 // ==========================================
-// COMPARACIÓN ANIMAL RE-ID
+// COMPARACIÓN ANIMAL RE-ID LEGACY
+//
+// MegaDescriptor + DINOv2
+// Se mantiene sólo como fallback
+// diagnóstico.
 // ==========================================
 
-async function addImageSimilarity(
+async function addLegacyImageSimilarity(
   candidate
 ) {
   const lostPhoto =
@@ -1117,12 +1356,6 @@ async function addImageSimilarity(
     candidate.dinoSimilarity =
       null;
 
-    // El score de datos queda visible,
-    // pero NO se convierte 1 a 1
-    // en resultado final.
-    //
-    // Sin comparación visual,
-    // limitamos la confianza.
     candidate.finalScore =
       Math.min(
         49,
@@ -1166,7 +1399,7 @@ async function addImageSimilarity(
         : candidate.foundReportId;
 
     console.log(
-      "🧠 Comparando Re-ID híbrido:",
+      "🧠 Comparando Re-ID híbrido legacy:",
       {
         perdida:
           candidate
@@ -1262,9 +1495,6 @@ async function addImageSimilarity(
 
     candidate.rawImageSimilarity =
       megaSimilarity;
-    // ========================================
-    // NORMALIZAR MEGADESCRIPTOR
-    // ========================================
 
     function normalizeMega(
       value
@@ -1316,10 +1546,6 @@ async function addImageSimilarity(
 
       return 0;
     }
-
-    // ========================================
-    // NORMALIZAR DINOV2
-    // ========================================
 
     function normalizeDino(
       value
@@ -1386,13 +1612,6 @@ async function addImageSimilarity(
         dinoSimilarity
       );
 
-    // ========================================
-    // SCORE VISUAL
-    //
-    // DINOv2 domina.
-    // MegaDescriptor acompaña.
-    // ========================================
-
     const visualScore =
       Math.round(
         dinoScore *
@@ -1410,16 +1629,6 @@ async function addImageSimilarity(
     candidate.dinoScore =
       dinoScore;
 
-    // ========================================
-    // SCORE FINAL
-    //
-    // La imagen pasa a ser el factor
-    // principal del matching.
-    //
-    // 75% visual
-    // 25% datos
-    // ========================================
-
     let finalScore =
       Math.round(
         visualScore *
@@ -1428,8 +1637,7 @@ async function addImageSimilarity(
           .candidateScore *
           0.25
       );
-
-    // ========================================
+          // ========================================
     // RAZAS ESPECÍFICAS INCOMPATIBLES
     // ========================================
 
@@ -1648,9 +1856,6 @@ async function addImageSimilarity(
         .compatibility
         ?.specificToGenericBreed
     ) {
-      // No descartamos,
-      // pero impedimos que un score
-      // mediocre suba artificialmente.
       if (
         visualScore < 60
       ) {
@@ -1842,15 +2047,6 @@ async function addImageSimilarity(
 
     // ======================================
     // FALLBACK SEGURO
-    //
-    // Antes:
-    // finalScore = candidateScore
-    //
-    // Ahora:
-    // el dato estructurado solo se usa
-    // como resultado preliminar y nunca
-    // debe producir por sí solo una
-    // coincidencia sugerida fuerte.
     // ======================================
 
     candidate.finalScore =
@@ -1875,6 +2071,645 @@ async function addImageSimilarity(
     );
 
     return candidate;
+  }
+}
+
+
+// ==========================================
+// COMPARACIÓN PETIDENTITY - MOTOR PRINCIPAL
+//
+// Paso 25
+//
+// Orden:
+// 1. PetIdentity /compare
+// 2. PetIdentity decide identidad
+// 3. Consensus Python + datos acompañan
+// 4. Mega/DINO legacy sólo son fallback
+//
+// Regla crítica:
+// - different_identity + crop dual => descartar
+// - sin crop dual => nunca auto-confirmar
+// ==========================================
+
+async function addImageSimilarity(
+  candidate
+) {
+  const lostPhoto =
+    candidate?.lost?.photo;
+
+  const targetPhoto =
+    candidate?.target?.photo ||
+    candidate?.found?.photo ||
+    candidate?.sighting?.photo;
+
+  // ========================================
+  // SIN DOS FOTOS
+  // ========================================
+
+  if (
+    !lostPhoto ||
+    !targetPhoto
+  ) {
+    candidate.imageSimilarity =
+      null;
+
+    candidate.rawImageSimilarity =
+      null;
+
+    candidate.petIdentitySimilarity =
+      null;
+
+    candidate.petIdentityScore =
+      null;
+
+    candidate.petIdentityEffectiveScore =
+      null;
+
+    candidate.petIdentityReliability =
+      null;
+
+    candidate.petIdentityVerdict =
+      null;
+
+    candidate.petIdentityCropA =
+      false;
+
+    candidate.petIdentityCropB =
+      false;
+
+    candidate.primaryEngine =
+      "PetIdentity";
+
+    candidate.finalScore =
+      Math.min(
+        49,
+        Math.round(
+          candidate
+            .candidateScore *
+            0.65
+        )
+      );
+
+    candidate.hybridScore =
+      candidate.finalScore;
+
+    candidate.reasons.push(
+      "PetIdentity no disponible: faltan dos fotos"
+    );
+
+    candidate.reasons.push(
+      "Resultado preliminar de baja confianza"
+    );
+
+    return candidate;
+  }
+
+  try {
+    // ======================================
+    // LLAMADA REAL AL SERVICIO PYTHON
+    // ======================================
+
+    const result =
+      await compareWithPetIdentity(
+        lostPhoto,
+        targetPhoto
+      );
+
+    const petRaw =
+      asFiniteNumber(
+        result
+          ?.petIdentitySimilarity,
+        null
+      );
+
+    const petScore =
+      asFiniteNumber(
+        result
+          ?.petIdentityScore,
+        0
+      );
+
+    const petEffective =
+      asFiniteNumber(
+        result
+          ?.petIdentityEffectiveScore,
+        0
+      );
+
+    const petReliability =
+      asFiniteNumber(
+        result
+          ?.petIdentityReliability,
+        0
+      );
+
+    const petVerdict =
+      String(
+        result
+          ?.petIdentityVerdict ||
+          ""
+      );
+
+    const cropA =
+      result
+        ?.petIdentityCropA ===
+      true;
+
+    const cropB =
+      result
+        ?.petIdentityCropB ===
+      true;
+
+    const dualCrop =
+      cropA &&
+      cropB;
+
+    const consensusPercentage =
+      clampScore(
+        asFiniteNumber(
+          result
+            ?.consensusPercentage,
+          0
+        )
+      );
+
+    // ======================================
+    // EXPONER DATOS EN EL CANDIDATO
+    // ======================================
+
+    candidate.primaryEngine =
+      result?.primaryEngine ||
+      "PetIdentity";
+
+    candidate.primaryEngineScore =
+      asFiniteNumber(
+        result
+          ?.primaryEngineScore,
+        petEffective
+      );
+
+    candidate.petIdentitySimilarity =
+      petRaw;
+
+    candidate.petIdentityScore =
+      petScore;
+
+    candidate.petIdentityPercentage =
+      petIdentityPercent(
+        petScore
+      );
+
+    candidate.petIdentityEffectiveScore =
+      petEffective;
+
+    candidate.petIdentityEffectivePercentage =
+      petIdentityPercent(
+        petEffective
+      );
+
+    candidate.petIdentityReliability =
+      petReliability;
+
+    candidate.petIdentityVerdict =
+      petVerdict;
+
+    candidate.petIdentityCropA =
+      cropA;
+
+    candidate.petIdentityCropB =
+      cropB;
+
+    candidate.consensusScore =
+      asFiniteNumber(
+        result
+          ?.consensusScore,
+        consensusPercentage /
+          100
+      );
+
+    candidate.consensusPercentage =
+      consensusPercentage;
+
+    candidate.consensusVerdict =
+      result
+        ?.consensusVerdict ||
+      null;
+
+    candidate.consensusReason =
+      result
+        ?.consensusReason ||
+      null;
+
+    // Mantener estas señales visibles
+    // para diagnóstico.
+
+    candidate.megaSimilarity =
+      asFiniteNumber(
+        result
+          ?.megaSimilarity,
+        null
+      );
+
+    candidate.dinoSimilarity =
+      asFiniteNumber(
+        result
+          ?.dinoSimilarity,
+        null
+      );
+
+    candidate.visualVerificationScore =
+      asFiniteNumber(
+        result
+          ?.visualScore,
+        null
+      );
+
+    candidate.rawImageSimilarity =
+      petRaw;
+
+    candidate.imageSimilarity =
+      petIdentityPercent(
+        petEffective
+      );
+
+    // ======================================
+    // SCORE BASE
+    //
+    // 70% PetIdentity efectivo
+    // 20% consensus Python
+    // 10% datos estructurados
+    // ======================================
+
+    let finalScore =
+      clampScore(
+        candidate
+          .petIdentityEffectivePercentage *
+          0.70 +
+        consensusPercentage *
+          0.20 +
+        candidate
+          .candidateScore *
+          0.10
+      );
+          // ======================================
+    // SIN CROP DUAL
+    //
+    // No permitimos persistir un match
+    // automático. Ya vimos que el fondo
+    // puede inflar similitudes.
+    // ======================================
+
+    if (!dualCrop) {
+      finalScore =
+        Math.min(
+          finalScore,
+          54
+        );
+
+      candidate.reasons.push(
+        "PetIdentity con baja autoridad: no hubo crop válido de ambos animales"
+      );
+    }
+
+    // ======================================
+    // IDENTIDAD DIFERENTE
+    //
+    // Con crop dual + reliability alta,
+    // PetIdentity tiene poder de descarte.
+    // ======================================
+
+    if (
+      dualCrop &&
+      petReliability >= 0.90 &&
+      petVerdict ===
+        "different_identity"
+    ) {
+      finalScore = 0;
+
+      candidate.reasons.push(
+        "PetIdentity descarta la coincidencia: identidad diferente"
+      );
+    }
+
+    // ======================================
+    // MATCH FUERTE
+    // ======================================
+
+    if (
+      dualCrop &&
+      petReliability >= 0.90 &&
+      petVerdict ===
+        "strong_identity_match"
+    ) {
+      finalScore =
+        Math.max(
+          finalScore,
+          75
+        );
+
+      candidate.reasons.push(
+        "PetIdentity: coincidencia fuerte de identidad"
+      );
+    }
+
+    // ======================================
+    // MATCH POSIBLE
+    //
+    // Puede superar el umbral 55, pero no
+    // recibe el piso fuerte de 75.
+    // ======================================
+
+    if (
+      dualCrop &&
+      petReliability >= 0.90 &&
+      petVerdict ===
+        "possible_identity_match"
+    ) {
+      finalScore =
+        Math.max(
+          finalScore,
+          55
+        );
+
+      candidate.reasons.push(
+        "PetIdentity: coincidencia posible; requiere revisión"
+      );
+    }
+
+    // ======================================
+    // IDENTIDAD INCIERTA
+    // ======================================
+
+    if (
+      petVerdict ===
+        "uncertain_identity"
+    ) {
+      finalScore =
+        Math.min(
+          finalScore,
+          54
+        );
+
+      candidate.reasons.push(
+        "PetIdentity no pudo confirmar identidad"
+      );
+    }
+
+    // ======================================
+    // CONFLICTOS DE DATOS
+    //
+    // PetIdentity fuerte puede sobrevivir
+    // a errores humanos de color/tamaño,
+    // pero no dejamos que datos conflictivos
+    // eleven un caso visual dudoso.
+    // ======================================
+
+    const strongPetIdentity =
+      dualCrop &&
+      petReliability >= 0.90 &&
+      petVerdict ===
+        "strong_identity_match";
+
+    if (
+      candidate
+        .compatibility
+        ?.sizeConflict &&
+      !strongPetIdentity
+    ) {
+      finalScore =
+        Math.min(
+          finalScore,
+          54
+        );
+
+      candidate.reasons.push(
+        "Tamaño diferente sin confirmación fuerte de PetIdentity"
+      );
+    }
+
+    if (
+      candidate
+        .compatibility
+        ?.colorConflict &&
+      !strongPetIdentity
+    ) {
+      finalScore =
+        Math.min(
+          finalScore,
+          54
+        );
+
+      candidate.reasons.push(
+        "Color diferente sin confirmación fuerte de PetIdentity"
+      );
+    }
+
+    // ======================================
+    // DISTANCIA
+    //
+    // Una distancia extrema no borra una
+    // identidad fuerte, pero sí frena
+    // candidatos dudosos.
+    // ======================================
+
+    if (
+      candidate.distanceKm !==
+        null &&
+      candidate.distanceKm >
+        100 &&
+      !strongPetIdentity
+    ) {
+      finalScore =
+        Math.min(
+          finalScore,
+          40
+        );
+
+      candidate.reasons.push(
+        "Distancia excesiva para una coincidencia no confirmada"
+      );
+    } else if (
+      candidate.distanceKm !==
+        null &&
+      candidate.distanceKm >
+        50 &&
+      !strongPetIdentity
+    ) {
+      finalScore =
+        Math.min(
+          finalScore,
+          49
+        );
+
+      candidate.reasons.push(
+        "Ubicación lejana para una coincidencia no confirmada"
+      );
+    }
+
+    // ======================================
+    // CLAMP FINAL
+    // ======================================
+
+    candidate.finalScore =
+      clampScore(
+        finalScore
+      );
+
+    candidate.hybridScore =
+      candidate.finalScore;
+
+    // ======================================
+    // RAZONES TÉCNICAS
+    // ======================================
+
+    if (petRaw !== null) {
+      candidate.reasons.push(
+        `PetIdentity raw: ${petRaw.toFixed(
+          6
+        )}`
+      );
+    }
+
+    candidate.reasons.push(
+      `PetIdentity efectivo: ${candidate.petIdentityEffectivePercentage}%`
+    );
+
+    candidate.reasons.push(
+      `PetIdentity reliability: ${petReliability.toFixed(
+        2
+      )}`
+    );
+
+    if (petVerdict) {
+      candidate.reasons.push(
+        `PetIdentity verdict: ${petVerdict}`
+      );
+    }
+
+    candidate.reasons.push(
+      `Consensus Python: ${consensusPercentage}%${
+        candidate.consensusVerdict
+          ? ` (${candidate.consensusVerdict})`
+          : ""
+      }`
+    );
+
+    if (
+      candidate.consensusReason
+    ) {
+      candidate.reasons.push(
+        `Consensus: ${candidate.consensusReason}`
+      );
+    }
+
+    console.log(
+      "🪪 Resultado PetIdentity:",
+      {
+        targetType:
+          candidate.targetType,
+
+        petRaw,
+
+        petEffective:
+          candidate
+            .petIdentityEffectivePercentage,
+
+        reliability:
+          petReliability,
+
+        verdict:
+          petVerdict,
+
+        cropA,
+
+        cropB,
+
+        consensus:
+          consensusPercentage,
+
+        dataScore:
+          candidate
+            .candidateScore,
+
+        finalScore:
+          candidate
+            .finalScore,
+      }
+    );
+
+    return candidate;
+  } catch (error) {
+    // ======================================
+    // FALLBACK LEGACY
+    //
+    // MegaDescriptor/DINO siguen disponibles
+    // para diagnóstico, pero NO pueden crear
+    // un match automático sin PetIdentity.
+    // ======================================
+
+    console.error(
+      "❌ PetIdentity /compare falló:",
+      error.message
+    );
+
+    candidate.reasons.push(
+      "PetIdentity temporalmente no disponible"
+    );
+
+    try {
+      candidate =
+        await addLegacyImageSimilarity(
+          candidate
+        );
+
+      // El fallback no puede pasar el
+      // umbral de persistencia.
+      candidate.finalScore =
+        Math.min(
+          49,
+          candidate.finalScore ??
+            49
+        );
+
+      candidate.hybridScore =
+        candidate.finalScore;
+
+      candidate.reasons.push(
+        "MegaDescriptor/DINO usados sólo como respaldo diagnóstico"
+      );
+
+      candidate.reasons.push(
+        "Resultado preliminar: requiere PetIdentity para confirmar"
+      );
+
+      return candidate;
+    } catch (
+      legacyError
+    ) {
+      console.error(
+        "❌ Fallback Re-ID también falló:",
+        legacyError.message
+      );
+
+      candidate.finalScore =
+        Math.min(
+          49,
+          Math.round(
+            candidate
+              .candidateScore *
+              0.65
+          )
+        );
+
+      candidate.hybridScore =
+        candidate.finalScore;
+
+      candidate.reasons.push(
+        "No fue posible completar la comparación visual"
+      );
+
+      return candidate;
+    }
   }
 }
 
@@ -2120,7 +2955,7 @@ function passesPreFilter(
 
   // Si una raza es genérica,
   // permitimos que llegue a la etapa visual,
-  // porque la foto puede resolver
+  // porque PetIdentity puede resolver
   // la ambigüedad.
   if (genericCandidate) {
     return true;
@@ -2214,6 +3049,8 @@ async function processCandidate(
 
   // ========================================
   // COMPARACIÓN VISUAL
+  //
+  // PetIdentity es ahora el motor principal.
   // ========================================
 
   candidate =
@@ -2224,19 +3061,48 @@ async function processCandidate(
   // ========================================
   // UMBRAL FINAL
   //
-  // Solo mostramos una coincidencia
-  // si alcanza 55%.
+  // Solo persistimos una coincidencia
+  // si alcanza 55.
   //
-  // Gracias al fallback seguro,
-  // si la IA visual no funciona,
-  // el score queda por debajo
-  // de este umbral.
+  // Paso 25:
+  // - strong_identity_match >= 75
+  // - possible_identity_match >= 55
+  // - different_identity = 0
+  // - sin crop dual <= 54
+  // - fallback legacy <= 49
   // ========================================
 
   if (
     candidate.finalScore <
     55
   ) {
+    console.log(
+      "🛑 Candidato descartado por score final:",
+      {
+        targetType:
+          candidate.targetType,
+
+        lostReportId:
+          candidate.lostReportId,
+
+        foundReportId:
+          candidate.foundReportId ||
+          null,
+
+        sightingId:
+          candidate.sightingId ||
+          null,
+
+        finalScore:
+          candidate.finalScore,
+
+        petIdentityVerdict:
+          candidate
+            .petIdentityVerdict ||
+          null,
+      }
+    );
+
     return null;
   }
 
@@ -2563,6 +3429,7 @@ async function generateCandidates() {
 
   return candidates;
 }
+
 // ==========================================
 // HELPERS PARA DEBUG / PRUEBAS
 // ==========================================
@@ -2602,6 +3469,9 @@ module.exports = {
   processCandidate,
 
   addImageSimilarity,
+  addLegacyImageSimilarity,
+  compareWithPetIdentity,
+  resolveImageUrlForReId,
 
   persistCandidate,
   buildMatchWhere,
