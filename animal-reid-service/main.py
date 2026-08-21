@@ -53,7 +53,7 @@ REQUEST_TIMEOUT_SECONDS = int(
 
 
 # ==========================================
-# PYTORCH - BAJO CONSUMO CPU / RAM
+# PYTORCH - MODO BAJA RAM
 # ==========================================
 
 try:
@@ -88,12 +88,12 @@ except Exception:
 app = FastAPI(
     title=(
         "PawTrace Animal Re-ID - "
-        "Production Lite"
+        "Production Lite Low RAM"
     ),
-    version="1.4.3.21-lite",
+    version="1.4.3.22-lite",
     description=(
-        "PetIdentity especializado, "
-        "serializado y optimizado para RAM."
+        "PetIdentity optimizado para "
+        "bajo consumo de RAM."
     ),
 )
 
@@ -104,8 +104,7 @@ app = FastAPI(
 
 _model_lock = Lock()
 
-# Una sola inferencia puede ejecutarse
-# simultáneamente dentro de este contenedor.
+# Una sola inferencia por vez.
 _inference_lock = Lock()
 
 _pet_id_processor = None
@@ -131,12 +130,9 @@ class EmbedRequest(BaseModel):
 
 def trim_process_memory():
     """
-    Intenta devolver al sistema operativo
-    memoria liberada por Python/PyTorch.
-
-    Railway usa Linux/glibc, donde
-    malloc_trim(0) puede reducir el RSS
-    después de varias inferencias.
+    Fuerza limpieza de objetos Python,
+    cachés de PyTorch y, en Linux,
+    devolución de memoria al SO.
     """
 
     gc.collect()
@@ -155,14 +151,13 @@ def trim_process_memory():
         libc.malloc_trim(0)
 
     except Exception:
-        # Si no existe malloc_trim,
-        # simplemente continuamos.
         pass
 
 
 def clamp01(
     value: float,
 ) -> float:
+
     return float(
         max(
             0.0,
@@ -210,7 +205,7 @@ def get_pet_identity_model():
 
         print(
             "🪪 Cargando PetIdentity "
-            "Production Lite...",
+            "Production Lite Low RAM...",
             flush=True,
         )
 
@@ -313,8 +308,6 @@ def load_image(
                 "RGB"
             )
 
-            # copy() evita mantener abierto
-            # el buffer original de Pillow.
             return image.copy()
 
     except Exception as error:
@@ -342,14 +335,6 @@ def load_image(
 def make_light_identity_crop(
     image: Image.Image,
 ) -> tuple[Image.Image, bool]:
-
-    """
-    Recorte central liviano para reducir
-    fondo sin cargar un detector adicional.
-
-    Production Lite prioriza consumo bajo
-    de memoria.
-    """
 
     width, height = image.size
 
@@ -432,21 +417,16 @@ def make_light_identity_crop(
 
 
 # ==========================================
-# EMBEDDINGS PETIDENTITY
+# EMBEDDING DE UNA SOLA IMAGEN
 #
-# CAMBIO IMPORTANTE:
-# Las imágenes se procesan como UN BATCH.
-#
-# Para /compare:
-#   antes = 2 forward passes
-#   ahora = 1 forward pass con 2 imágenes
-#
-# También eliminamos explícitamente
-# inputs y outputs al terminar.
+# IMPORTANTE:
+# Se procesa UNA sola imagen por forward.
+# Después se eliminan todos los tensores
+# temporales antes de procesar la siguiente.
 # ==========================================
 
-def get_pet_identity_embeddings(
-    images: list[Image.Image],
+def get_single_pet_identity_embedding(
+    image: Image.Image,
 ) -> torch.Tensor:
 
     processor, model = (
@@ -455,13 +435,13 @@ def get_pet_identity_embeddings(
 
     inputs = None
     outputs = None
-    embeddings = None
+    embedding = None
+    result = None
 
     try:
         inputs = processor(
             images=[
                 image.convert("RGB")
-                for image in images
             ],
             return_tensors="pt",
         )
@@ -479,7 +459,7 @@ def get_pet_identity_embeddings(
                 **inputs
             )
 
-            embeddings = (
+            embedding = (
                 outputs
                 .last_hidden_state[
                     :,
@@ -488,18 +468,17 @@ def get_pet_identity_embeddings(
                 ]
             )
 
-            embeddings = (
+            embedding = (
                 torch.nn.functional
                 .normalize(
-                    embeddings,
+                    embedding,
                     p=2,
                     dim=1,
                 )
             )
 
-            # Solo devolvemos el tensor CPU.
             result = (
-                embeddings
+                embedding[0]
                 .detach()
                 .cpu()
                 .clone()
@@ -508,10 +487,8 @@ def get_pet_identity_embeddings(
         return result
 
     finally:
-        # Liberación explícita de todos los
-        # tensores temporales del forward.
-        if embeddings is not None:
-            del embeddings
+        if embedding is not None:
+            del embedding
 
         if outputs is not None:
             del outputs
@@ -583,16 +560,10 @@ def get_reliability(
     crop_b: bool,
 ) -> float:
 
-    if (
-        crop_a
-        and crop_b
-    ):
+    if crop_a and crop_b:
         return 1.0
 
-    if (
-        crop_a
-        or crop_b
-    ):
+    if crop_a or crop_b:
         return 0.60
 
     return 0.35
@@ -616,43 +587,30 @@ def pet_identity_verdict(
 
     if (
         both_crops
-        and
-        raw_similarity >= 0.78
-        and
-        effective_score >= 0.80
+        and raw_similarity >= 0.78
+        and effective_score >= 0.80
     ):
-        return (
-            "strong_identity_match"
-        )
+        return "strong_identity_match"
 
     if (
         both_crops
-        and
-        raw_similarity >= 0.65
-        and
-        effective_score >= 0.55
+        and raw_similarity >= 0.65
+        and effective_score >= 0.55
     ):
-        return (
-            "possible_identity_match"
-        )
+        return "possible_identity_match"
 
     if (
         both_crops
-        and
-        raw_similarity <= 0.40
+        and raw_similarity <= 0.40
     ):
-        return (
-            "different_identity"
-        )
+        return "different_identity"
 
     if not both_crops:
         return (
             "low_reliability_without_dual_crop"
         )
 
-    return (
-        "uncertain_identity"
-    )
+    return "uncertain_identity"
 
 
 # ==========================================
@@ -687,13 +645,13 @@ def root():
             "PawTrace Animal Re-ID",
 
         "version":
-            "1.4.3.21-lite",
+            "1.4.3.22-lite",
 
         "status":
             "running",
 
         "mode":
-            "production-lite",
+            "production-lite-low-ram",
 
         "model":
             PET_ID_MODEL_NAME,
@@ -709,7 +667,7 @@ def root():
             (
                 "download → "
                 "lightweight center crop → "
-                "PetIdentity batched inference → "
+                "sequential PetIdentity inference → "
                 "cosine similarity"
             ),
 
@@ -738,10 +696,10 @@ def health():
             "pawtrace-animal-reid",
 
         "version":
-            "1.4.3.21-lite",
+            "1.4.3.22-lite",
 
         "mode":
-            "production-lite",
+            "production-lite-low-ram",
 
         "device":
             DEVICE,
@@ -766,7 +724,7 @@ def embed(
 
     original = None
     identity_image = None
-    embeddings = None
+    embedding = None
 
     with _inference_lock:
 
@@ -784,26 +742,26 @@ def embed(
                 )
             )
 
-            embeddings = (
-                get_pet_identity_embeddings(
-                    [
-                        identity_image
-                    ]
+            embedding = (
+                get_single_pet_identity_embedding(
+                    identity_image
                 )
             )
 
-            embedding = (
-                embeddings[0]
+            embedding_list = (
+                embedding
                 .float()
                 .tolist()
             )
 
             return {
                 "embedding":
-                    embedding,
+                    embedding_list,
 
                 "embeddingSize":
-                    len(embedding),
+                    len(
+                        embedding_list
+                    ),
 
                 "model":
                     PET_ID_MODEL_NAME,
@@ -822,16 +780,16 @@ def embed(
 
                 "processingMode":
                     (
-                        "production-lite-center-crop"
+                        "production-lite-low-ram-center-crop"
                         if cropped
                         else
-                        "production-lite-original"
+                        "production-lite-low-ram-original"
                     ),
             }
 
         finally:
-            if embeddings is not None:
-                del embeddings
+            if embedding is not None:
+                del embedding
 
             if identity_image is not None:
                 try:
@@ -863,7 +821,7 @@ def compare(
     )
 
     print(
-        "🪪 PETIDENTITY PRODUCTION LITE",
+        "🪪 PETIDENTITY PRODUCTION LITE LOW RAM",
         flush=True,
     )
 
@@ -885,17 +843,14 @@ def compare(
     image_a = None
     image_b = None
 
-    embeddings = None
+    embedding_a = None
+    embedding_b = None
 
     with _inference_lock:
 
         try:
             original_a = load_image(
                 payload.imageA
-            )
-
-            original_b = load_image(
-                payload.imageB
             )
 
             (
@@ -907,6 +862,43 @@ def compare(
                 )
             )
 
+            # ==================================
+            # IMAGEN A
+            # ==================================
+
+            embedding_a = (
+                get_single_pet_identity_embedding(
+                    image_a
+                )
+            )
+
+            # Liberamos A antes de cargar B.
+            if image_a is not None:
+                try:
+                    image_a.close()
+                except Exception:
+                    pass
+
+                image_a = None
+
+            if original_a is not None:
+                try:
+                    original_a.close()
+                except Exception:
+                    pass
+
+                original_a = None
+
+            trim_process_memory()
+
+            # ==================================
+            # IMAGEN B
+            # ==================================
+
+            original_b = load_image(
+                payload.imageB
+            )
+
             (
                 image_b,
                 crop_b,
@@ -916,29 +908,33 @@ def compare(
                 )
             )
 
-            # ==================================
-            # UNA SOLA INFERENCIA
-            #
-            # Las dos imágenes se procesan
-            # juntas en un único batch.
-            # ==================================
-
-            embeddings = (
-                get_pet_identity_embeddings(
-                    [
-                        image_a,
-                        image_b,
-                    ]
+            embedding_b = (
+                get_single_pet_identity_embedding(
+                    image_b
                 )
             )
 
-            embedding_a = (
-                embeddings[0]
-            )
+            if image_b is not None:
+                try:
+                    image_b.close()
+                except Exception:
+                    pass
 
-            embedding_b = (
-                embeddings[1]
-            )
+                image_b = None
+
+            if original_b is not None:
+                try:
+                    original_b.close()
+                except Exception:
+                    pass
+
+                original_b = None
+
+            trim_process_memory()
+
+            # ==================================
+            # SIMILITUD
+            # ==================================
 
             raw_similarity = float(
                 torch.dot(
@@ -979,8 +975,6 @@ def compare(
                 )
             )
 
-            # Production Lite:
-            # PetIdentity es el motor único.
             consensus_score = (
                 effective_score
             )
@@ -1078,7 +1072,7 @@ def compare(
                     None,
 
                 "processingMode":
-                    "production-lite",
+                    "production-lite-low-ram",
 
                 "megaSimilarity":
                     0.0,
@@ -1124,9 +1118,8 @@ def compare(
 
                 "consensusReason":
                     (
-                        "Production Lite: "
-                        "PetIdentity especializado "
-                        "como único motor"
+                        "Production Lite Low RAM: "
+                        "PetIdentity como único motor"
                     ),
 
                 "petIdentityEnabled":
@@ -1197,6 +1190,9 @@ def compare(
                 "productionLite":
                     True,
 
+                "lowRamMode":
+                    True,
+
                 "cropStrategy":
                     (
                         "center-90-percent"
@@ -1216,7 +1212,7 @@ def compare(
 
             print(
                 "❌ Error PetIdentity "
-                "Production Lite:",
+                "Production Lite Low RAM:",
                 repr(error),
                 flush=True,
             )
@@ -1231,8 +1227,11 @@ def compare(
             )
 
         finally:
-            if embeddings is not None:
-                del embeddings
+            if embedding_a is not None:
+                del embedding_a
+
+            if embedding_b is not None:
+                del embedding_b
 
             if image_a is not None:
                 try:
