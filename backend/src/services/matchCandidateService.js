@@ -1749,20 +1749,45 @@ async function addImageSimilarity(
     // IDENTIDAD INCIERTA
     // ======================================
 
-    if (
-      petVerdict ===
-        "uncertain_identity"
-    ) {
-      finalScore =
-        Math.min(
-          finalScore,
-          54
-        );
+   if (
+  petVerdict ===
+    "uncertain_identity"
+) {
+  if (
+    dualCrop &&
+    petReliability >= 0.90 &&
+    petRaw !== null &&
+    petRaw >= 0.58
+  ) {
+    // Caso visual prometedor pero todavía
+    // no suficientemente fuerte para confirmar.
+    finalScore =
+      Math.max(
+        finalScore,
+        55
+      );
 
-      candidate.reasons.push(
-        "PetIdentity no pudo confirmar identidad"
+    finalScore =
+      Math.min(
+        finalScore,
+        69
+      );
+
+    candidate.reasons.push(
+      "PetIdentity: posible coincidencia visual; requiere revisión"
+    );
+    } else {
+     finalScore =
+        Math.min(
+         finalScore,
+          54
+      );
+
+     candidate.reasons.push(
+       "PetIdentity no pudo confirmar identidad"
       );
     }
+  }
 
     // ======================================
     // CONFLICTOS DE DATOS
